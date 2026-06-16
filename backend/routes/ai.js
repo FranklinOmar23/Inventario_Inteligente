@@ -8,12 +8,12 @@ router.use(authenticate);
 
 const OPENROUTER_BASE = 'https://openrouter.ai/api/v1';
 
-async function callOpenRouter(messages, responseSchema = null) {
+async function callOpenRouter(messages, responseSchema = null, opts = {}) {
   const model = process.env.OPENROUTER_MODEL || 'openai/gpt-4o-mini';
   const payload = {
     model,
     messages,
-    max_tokens: 1024,
+    max_tokens: opts.maxTokens || 1024,
     temperature: 0.1,
   };
 
@@ -197,6 +197,54 @@ Devuelve SOLO JSON válido:
   } catch (err) {
     console.error('AI identify-model error:', err.response?.data || err.message);
     res.status(500).json({ error: 'Error al identificar el dispositivo', detail: err.message });
+  }
+});
+
+// Analyze a photo of an invoice/receipt and extract line items for bulk entry
+router.post('/detect-invoice', async (req, res) => {
+  try {
+    const { image_url, image_base64 } = req.body;
+    if (!image_url && !image_base64) return res.status(400).json({ error: 'Se requiere image_url o image_base64' });
+
+    const MAX_B64_BYTES = 10 * 1024 * 1024;
+    if (image_base64 && Buffer.byteLength(image_base64, 'utf8') > MAX_B64_BYTES) {
+      return res.status(413).json({ error: 'La imagen es demasiado grande. Usa una imagen menor a 7 MB.' });
+    }
+
+    const rawUrl = image_url || `data:image/jpeg;base64,${image_base64}`;
+
+    const result = await callOpenRouter([
+      {
+        role: 'user',
+        content: [
+          { type: 'image_url', image_url: { url: rawUrl } },
+          {
+            type: 'text',
+            text: `Eres un asistente de inventario. Analiza esta imagen de una factura o recibo de compra.
+
+PASO 1 — Lee únicamente las filas de la tabla de productos/artículos. Ignora encabezados de la empresa, datos del cliente, número de factura, fecha, subtotal, impuestos, descuentos, "paga con", "vueltas" y el total final.
+PASO 2 — Para cada producto extrae:
+- name: el nombre del artículo exactamente como aparece
+- quantity: la cantidad (número entero, si no aparece usa 1)
+- unit_price: el precio unitario como número (sin símbolo de moneda ni comas)
+PASO 3 — Ignora filas vacías o sin nombre de producto claro.
+
+Devuelve SOLO JSON válido, sin texto adicional:
+{
+  "supplier": "nombre del negocio/proveedor en la factura, o vacío si no aparece",
+  "items": [
+    { "name": "nombre del producto", "quantity": 2, "unit_price": 6000 }
+  ]
+}`
+          }
+        ]
+      }
+    ], null, { maxTokens: 2048 });
+
+    res.json(result);
+  } catch (err) {
+    console.error('AI detect-invoice error:', err.response?.data || err.message);
+    res.status(500).json({ error: 'Error al analizar la factura', detail: err.message });
   }
 });
 

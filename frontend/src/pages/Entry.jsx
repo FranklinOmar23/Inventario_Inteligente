@@ -3,7 +3,8 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useNavigate, Link, useSearchParams } from 'react-router-dom';
 import {
   ArrowDownToLine, Sparkles, Check, Loader2, Camera,
-  Barcode, RefreshCw, Search, Plus, PackagePlus, X, ScanLine, Upload, Clock,
+  Barcode, RefreshCw, Search, Plus, PackagePlus, X, ScanLine, Upload, Clock, DollarSign, Calendar,
+  Receipt, Trash2,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -48,8 +49,9 @@ const EMPTY_FORM = {
   name: '', description: '', category_id: '', department_id: '', sucursal_id: '',
   shelf_id: '', shelf_name: '',
   asset_tag: '', service_tag: '', model: '', brand: '',
-  serial_number: '', photo_url: '', quantity: 1, notes: '',
+  serial_number: '', photo_url: '', quantity: 1, unit_cost: '', notes: '',
   entry_date: new Date().toISOString().split('T')[0],
+  expiration_date: '', batch_number: '', unit_measure: '',
 };
 
 const STATUS_LABEL = { in_stock: 'En stock', checked_out: 'En uso', maintenance: 'Mantenimiento', retired: 'Retirado' };
@@ -57,8 +59,11 @@ const STATUS_COLOR = { in_stock: 'default', checked_out: 'secondary', maintenanc
 
 const TABS = [
   { id: 'manual',  label: 'Manual',        icon: PackagePlus },
+  { id: 'invoice', label: 'Factura',       icon: Receipt },
   { id: 'restock', label: 'Reponer Stock',  icon: Plus },
 ];
+
+const EMPTY_INVOICE_ITEM = { include: true, name: '', quantity: 1, unit_cost: '', category_id: '' };
 
 function findItDept(departments) {
   return departments.find(d => /\bit\b|tecnolog|sistemas/i.test(d.name)) ?? departments[0];
@@ -144,7 +149,12 @@ function RecentEntriesPanel() {
 }
 
 export default function Entry() {
-  const { user } = useAuth();
+  const { user, tenant } = useAuth();
+  const isValued = tenant?.inventory_type === 'valued';
+  const businessType = tenant?.business_type || 'tecnologia';
+  const isFood = businessType === 'alimentos';
+  const isSupplies = businessType === 'insumos';
+  const showDeviceDetails = !isFood && !isSupplies;
   const { toast } = useToast();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
@@ -170,6 +180,15 @@ export default function Entry() {
   const [foundItem, setFoundItem] = useState(null);
   const [addQty, setAddQty] = useState(1);
   const [addingStock, setAddingStock] = useState(false);
+
+  // Invoice (factura) bulk entry
+  const [invoicePhoto, setInvoicePhoto] = useState(null);
+  const [invoiceProcessing, setInvoiceProcessing] = useState(false);
+  const [invoiceItems, setInvoiceItems] = useState([]);
+  const [invoiceCommon, setInvoiceCommon] = useState({
+    department_id: '', sucursal_id: '', entry_date: new Date().toISOString().split('T')[0],
+  });
+  const [bulkSaving, setBulkSaving] = useState(false);
 
   // Shared
   const [labelItem, setLabelItem] = useState(null);
@@ -317,11 +336,105 @@ export default function Entry() {
     }
   };
 
+  // ── Invoice (factura) → AI extraction → bulk entry ─────────────────────────
+  const handleAnalyzeInvoice = async () => {
+    if (!invoicePhoto) return;
+    setInvoiceProcessing(true);
+    try {
+      const { data: result } = await api.post('/ai/detect-invoice', { image_url: invoicePhoto });
+      const items = (result.items || []).map(i => ({
+        include: true,
+        name: i.name || '',
+        quantity: i.quantity || 1,
+        unit_cost: i.unit_price != null ? String(i.unit_price) : '',
+        category_id: '',
+      }));
+      if (items.length === 0) {
+        toast({ title: 'No se detectaron productos', description: 'Intenta con una foto más clara de la factura', variant: 'destructive' });
+        return;
+      }
+      setInvoiceItems(items);
+      toast({ title: `${items.length} producto(s) detectado(s)`, description: result.supplier ? `Factura de ${result.supplier}` : 'Revisa y ajusta antes de registrar' });
+    } catch (err) {
+      toast({ title: 'IA no disponible', description: err.response?.data?.error || 'Intenta de nuevo', variant: 'destructive' });
+    } finally {
+      setInvoiceProcessing(false);
+    }
+  };
+
+  const updateInvoiceItem = (idx, field, value) => {
+    setInvoiceItems(items => items.map((it, i) => i === idx ? { ...it, [field]: value } : it));
+  };
+  const removeInvoiceItem = (idx) => setInvoiceItems(items => items.filter((_, i) => i !== idx));
+  const addInvoiceItem = () => setInvoiceItems(items => [...items, { ...EMPTY_INVOICE_ITEM }]);
+  const resetInvoice = () => { setInvoicePhoto(null); setInvoiceItems([]); };
+
+  const handleBulkSubmit = async () => {
+    const selected = invoiceItems.filter(i => i.include && i.name.trim());
+    if (selected.length === 0) {
+      toast({ title: 'Selecciona al menos un producto', variant: 'destructive' }); return;
+    }
+    if (!invoiceCommon.department_id) {
+      toast({ title: 'Selecciona un departamento', variant: 'destructive' }); return;
+    }
+    if (isValued && selected.some(i => !i.unit_cost)) {
+      toast({ title: 'Precio unitario requerido', description: 'Este inventario es valorizado: ingresa el precio de cada producto', variant: 'destructive' });
+      return;
+    }
+    setBulkSaving(true);
+    try {
+      const dept = departments.find(d => d.id === invoiceCommon.department_id);
+      const suc  = sucursales.find(s => s.id === invoiceCommon.sucursal_id);
+
+      const payloadItems = selected.map(i => {
+        const cat = categories.find(c => c.id === i.category_id);
+        return {
+          name: i.name,
+          quantity: Number(i.quantity) || 1,
+          unit_cost: i.unit_cost !== '' ? Number(i.unit_cost) : null,
+          category_id: i.category_id || null,
+          category_name: cat?.name || '',
+          department_id: invoiceCommon.department_id,
+          department_name: dept?.name || '',
+          sucursal_id: invoiceCommon.sucursal_id || null,
+          sucursal_name: suc?.name || '',
+          entry_date: invoiceCommon.entry_date,
+        };
+      });
+
+      const { data: created } = await api.post('/inventory/bulk', { items: payloadItems });
+
+      await Promise.all(created.map(item => api.post('/logs', {
+        action: 'entry', item_id: item.id, item_name: item.name,
+        category_name: item.category_name, department_name: item.department_name,
+        quantity: item.quantity,
+        performed_by: user?.full_name || user?.email || 'Sistema',
+        performed_by_id: user?.id,
+        details: `Entrada por factura: ${item.name}`,
+        timestamp: new Date().toISOString(),
+      })));
+
+      queryClient.invalidateQueries({ queryKey: ['inventory'] });
+      queryClient.invalidateQueries({ queryKey: ['logs-recent'] });
+
+      toast({ title: `${created.length} producto(s) registrados`, description: 'El inventario fue actualizado' });
+      resetInvoice();
+    } catch (err) {
+      toast({ title: 'Error', description: err.response?.data?.error || 'Error al registrar los productos', variant: 'destructive' });
+    } finally {
+      setBulkSaving(false);
+    }
+  };
+
   // ── Submit manual form ────────────────────────────────────────────────────
   const handleSubmit = async (e) => {
     e.preventDefault();
     if (!form.name || !form.category_id || !form.department_id) {
       toast({ title: 'Campos requeridos', description: 'Nombre, categoría y departamento son obligatorios', variant: 'destructive' });
+      return;
+    }
+    if (isValued && !form.unit_cost) {
+      toast({ title: 'Precio unitario requerido', description: 'Este inventario es valorizado: ingresa el precio unitario', variant: 'destructive' });
       return;
     }
     setSaving(true);
@@ -334,6 +447,7 @@ export default function Entry() {
       const item = await api.post('/inventory', {
         ...form,
         quantity:        Number(form.quantity) || 1,
+        unit_cost:       form.unit_cost !== '' ? Number(form.unit_cost) : null,
         department_name: dept?.name  || '',
         category_name:   cat?.name   || '',
         sucursal_name:   suc?.name   || '',
@@ -470,6 +584,146 @@ export default function Entry() {
                   <X className="w-3 h-3" /> Cancelar
                 </button>
               </div>
+            )}
+          </div>
+        )}
+
+        {/* ── Factura Tab ──────────────────────────────────────────────── */}
+        {tab === 'invoice' && (
+          <div className="space-y-5">
+            <div className="glass-card rounded-2xl p-5 space-y-4">
+              <div className="flex items-center gap-2">
+                <Receipt className="w-4 h-4 text-primary" />
+                <h2 className="text-sm font-semibold">Registrar desde una factura</h2>
+              </div>
+              <p className="text-xs text-muted-foreground">
+                Sube una foto de la factura o recibo de compra. La IA detectará los productos, cantidades y precios para registrarlos todos de una vez.
+              </p>
+
+              <CameraCapture
+                photoUrl={invoicePhoto}
+                onPhotoUploaded={setInvoicePhoto}
+                onClear={() => setInvoicePhoto(null)}
+                isProcessing={invoiceProcessing}
+              />
+
+              {invoicePhoto && !invoiceProcessing && (
+                <Button type="button" className="w-full rounded-xl gap-1.5" onClick={handleAnalyzeInvoice}>
+                  <Sparkles className="w-4 h-4" /> Analizar Factura con IA
+                </Button>
+              )}
+              {invoiceProcessing && (
+                <div className="flex items-center justify-center gap-2 py-2 text-sm text-muted-foreground">
+                  <Loader2 className="w-4 h-4 animate-spin" /> Leyendo la factura…
+                </div>
+              )}
+            </div>
+
+            {invoiceItems.length > 0 && (
+              <>
+                {/* Shared destination fields */}
+                <div className="glass-card rounded-2xl p-5 space-y-4">
+                  <h2 className="text-sm font-semibold">Destino de los productos</h2>
+                  <div className="grid sm:grid-cols-2 gap-4">
+                    <div className="space-y-1.5">
+                      <Label className="text-xs">Departamento *</Label>
+                      <Select value={invoiceCommon.department_id} onValueChange={v => setInvoiceCommon(p => ({ ...p, department_id: v }))}>
+                        <SelectTrigger className="rounded-xl"><SelectValue placeholder="Seleccionar" /></SelectTrigger>
+                        <SelectContent>{departments.map(d => <SelectItem key={d.id} value={d.id}>{d.name}</SelectItem>)}</SelectContent>
+                      </Select>
+                    </div>
+                    <div className="space-y-1.5">
+                      <Label className="text-xs">Sucursal</Label>
+                      <Select value={invoiceCommon.sucursal_id || '__none__'} onValueChange={v => setInvoiceCommon(p => ({ ...p, sucursal_id: v === '__none__' ? '' : v }))}>
+                        <SelectTrigger className="rounded-xl"><SelectValue placeholder="Seleccionar (opcional)" /></SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="__none__">Sin sucursal específica</SelectItem>
+                          {sucursales.map(s => <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>)}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label className="text-xs">Fecha de Entrada</Label>
+                    <Input type="date" value={invoiceCommon.entry_date} onChange={e => setInvoiceCommon(p => ({ ...p, entry_date: e.target.value }))} className="rounded-xl" />
+                  </div>
+                </div>
+
+                {/* Editable items list */}
+                <div className="glass-card rounded-2xl p-5 space-y-3">
+                  <div className="flex items-center justify-between">
+                    <h2 className="text-sm font-semibold">
+                      Productos detectados ({invoiceItems.filter(i => i.include).length}/{invoiceItems.length})
+                    </h2>
+                    <Button type="button" variant="outline" size="sm" className="rounded-xl gap-1 text-xs" onClick={addInvoiceItem}>
+                      <Plus className="w-3.5 h-3.5" /> Agregar producto
+                    </Button>
+                  </div>
+
+                  <div className="space-y-3">
+                    {invoiceItems.map((item, idx) => (
+                      <div key={idx} className={cn('border rounded-xl p-3 space-y-2 transition-opacity', item.include ? 'border-border' : 'border-border/50 opacity-50')}>
+                        <div className="flex items-start gap-2">
+                          <input
+                            type="checkbox"
+                            checked={item.include}
+                            onChange={e => updateInvoiceItem(idx, 'include', e.target.checked)}
+                            className="mt-2.5 w-4 h-4 rounded accent-primary shrink-0"
+                          />
+                          <Input
+                            value={item.name}
+                            onChange={e => updateInvoiceItem(idx, 'name', e.target.value)}
+                            placeholder="Nombre del producto"
+                            className="rounded-xl flex-1"
+                          />
+                          <button type="button" onClick={() => removeInvoiceItem(idx)} className="p-2 text-muted-foreground hover:text-destructive transition-colors shrink-0">
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                        </div>
+                        <div className="grid grid-cols-3 gap-2 pl-6">
+                          <div className="space-y-1">
+                            <Label className="text-[10px] text-muted-foreground">Cantidad</Label>
+                            <Input type="number" min={1} value={item.quantity} onChange={e => updateInvoiceItem(idx, 'quantity', e.target.value)} className="rounded-xl h-9" />
+                          </div>
+                          {isValued && (
+                            <div className="space-y-1">
+                              <Label className="text-[10px] text-muted-foreground">Precio Unit.</Label>
+                              <Input type="number" min={0} step="0.01" value={item.unit_cost} onChange={e => updateInvoiceItem(idx, 'unit_cost', e.target.value)} placeholder="0.00" className="rounded-xl h-9" />
+                            </div>
+                          )}
+                          <div className="space-y-1 col-span-2 sm:col-span-1">
+                            <Label className="text-[10px] text-muted-foreground">Categoría</Label>
+                            <Select value={item.category_id || '__none__'} onValueChange={v => updateInvoiceItem(idx, 'category_id', v === '__none__' ? '' : v)}>
+                              <SelectTrigger className="rounded-xl h-9"><SelectValue placeholder="Sin categoría" /></SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="__none__">Sin categoría</SelectItem>
+                                {categories.map(c => <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>)}
+                              </SelectContent>
+                            </Select>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+
+                  {isValued && (
+                    <div className="flex items-center justify-between pt-2 border-t border-border text-sm">
+                      <span className="text-muted-foreground">Valor total</span>
+                      <span className="font-semibold text-primary">
+                        RD${invoiceItems.filter(i => i.include).reduce((sum, i) => sum + (Number(i.unit_cost) || 0) * (Number(i.quantity) || 0), 0).toLocaleString('es-DO', { minimumFractionDigits: 2 })}
+                      </span>
+                    </div>
+                  )}
+                </div>
+
+                <div className="flex gap-3">
+                  <Button type="button" variant="outline" className="rounded-xl flex-1" onClick={resetInvoice}>Cancelar</Button>
+                  <Button type="button" className="rounded-xl flex-1" onClick={handleBulkSubmit} disabled={bulkSaving}>
+                    {bulkSaving ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <Check className="w-4 h-4 mr-2" />}
+                    Registrar {invoiceItems.filter(i => i.include).length} producto(s)
+                  </Button>
+                </div>
+              </>
             )}
           </div>
         )}
@@ -626,6 +880,28 @@ export default function Entry() {
                   <Input type="number" min={1} value={form.quantity} onChange={e => update('quantity', e.target.value)} className="rounded-xl" />
                 </div>
               </div>
+
+              {isValued && (
+                <div className="grid sm:grid-cols-2 gap-4">
+                  <div className="space-y-1.5">
+                    <Label className="text-xs flex items-center gap-1"><DollarSign className="w-3 h-3" /> Precio Unitario *</Label>
+                    <Input
+                      type="number" min={0} step="0.01"
+                      value={form.unit_cost}
+                      onChange={e => update('unit_cost', e.target.value)}
+                      placeholder="0.00"
+                      className="rounded-xl"
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label className="text-xs text-muted-foreground">Valor total</Label>
+                    <div className="h-9 flex items-center px-3 rounded-xl bg-muted text-sm font-semibold text-primary">
+                      RD${((Number(form.unit_cost) || 0) * (Number(form.quantity) || 0)).toLocaleString('es-DO', { minimumFractionDigits: 2 })}
+                    </div>
+                  </div>
+                </div>
+              )}
+
               <div className="grid sm:grid-cols-2 gap-4">
                 <div className="space-y-1.5">
                   <Label className="text-xs">Departamento *</Label>
@@ -679,51 +955,104 @@ export default function Entry() {
                 <Label className="text-xs">Fecha de Entrada</Label>
                 <Input type="date" value={form.entry_date} onChange={e => update('entry_date', e.target.value)} className="rounded-xl" />
               </div>
+
+              {isFood && (
+                <div className="grid sm:grid-cols-2 gap-4">
+                  <div className="space-y-1.5">
+                    <Label className="text-xs flex items-center gap-1"><Calendar className="w-3 h-3" /> Fecha de Caducidad (opcional)</Label>
+                    <Input type="date" value={form.expiration_date} onChange={e => update('expiration_date', e.target.value)} className="rounded-xl" />
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label className="text-xs">Lote</Label>
+                    <Input value={form.batch_number} onChange={e => update('batch_number', e.target.value)} placeholder="Ej: L-2026-045" className="rounded-xl" />
+                  </div>
+                </div>
+              )}
+
+              {(isFood || isSupplies) && (
+                <div className="space-y-1.5">
+                  <Label className="text-xs">Unidad de Medida</Label>
+                  <Select value={form.unit_measure || '__none__'} onValueChange={v => update('unit_measure', v === '__none__' ? '' : v)}>
+                    <SelectTrigger className="rounded-xl"><SelectValue placeholder="Seleccionar" /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="__none__">Sin especificar</SelectItem>
+                      <SelectItem value="unidad">Unidad</SelectItem>
+                      <SelectItem value="caja">Caja</SelectItem>
+                      <SelectItem value="paquete">Paquete</SelectItem>
+                      <SelectItem value="resma">Resma</SelectItem>
+                      <SelectItem value="kg">Kilogramo (kg)</SelectItem>
+                      <SelectItem value="g">Gramo (g)</SelectItem>
+                      <SelectItem value="l">Litro (L)</SelectItem>
+                      <SelectItem value="ml">Mililitro (ml)</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              )}
             </div>
 
-            {/* Device details */}
-            <div className="glass-card rounded-2xl p-5 space-y-4">
-              <h2 className="text-sm font-semibold">Detalles del Dispositivo</h2>
-              <div className="grid sm:grid-cols-2 gap-4">
-                <div className="space-y-1.5">
-                  <Label className="text-xs">Marca</Label>
-                  <Input value={form.brand} onChange={e => update('brand', e.target.value)} placeholder="Dell, HP, Lenovo..." className="rounded-xl" />
+            {/* Device / product details */}
+            {showDeviceDetails ? (
+              <div className="glass-card rounded-2xl p-5 space-y-4">
+                <h2 className="text-sm font-semibold">Detalles del Dispositivo</h2>
+                <div className="grid sm:grid-cols-2 gap-4">
+                  <div className="space-y-1.5">
+                    <Label className="text-xs">Marca</Label>
+                    <Input value={form.brand} onChange={e => update('brand', e.target.value)} placeholder="Dell, HP, Lenovo..." className="rounded-xl" />
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label className="text-xs">Modelo</Label>
+                    <Input value={form.model} onChange={e => update('model', e.target.value)} placeholder="Latitude 5520" className="rounded-xl" />
+                  </div>
                 </div>
-                <div className="space-y-1.5">
-                  <Label className="text-xs">Modelo</Label>
-                  <Input value={form.model} onChange={e => update('model', e.target.value)} placeholder="Latitude 5520" className="rounded-xl" />
-                </div>
-              </div>
 
-              <div className="space-y-1.5">
-                <div className="flex items-center justify-between">
-                  <Label className="text-xs">Activo Fijo / Código de Barras</Label>
-                  <Button type="button" variant="outline" size="sm" className="h-6 px-2 text-xs rounded-lg gap-1" onClick={() => update('asset_tag', generateBarcode())}>
-                    <RefreshCw className="w-3 h-3" /> Generar código
-                  </Button>
+                <div className="space-y-1.5">
+                  <div className="flex items-center justify-between">
+                    <Label className="text-xs">Activo Fijo / Código de Barras</Label>
+                    <Button type="button" variant="outline" size="sm" className="h-6 px-2 text-xs rounded-lg gap-1" onClick={() => update('asset_tag', generateBarcode())}>
+                      <RefreshCw className="w-3 h-3" /> Generar código
+                    </Button>
+                  </div>
+                  <div className="relative">
+                    <Barcode className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                    <Input value={form.asset_tag} onChange={e => update('asset_tag', e.target.value)} placeholder="AF-0001 o haz clic en Generar" className="rounded-xl pl-9 font-mono" />
+                  </div>
+                  {form.asset_tag && <p className="text-[11px] text-muted-foreground">Al guardar se mostrará la etiqueta para imprimir</p>}
                 </div>
-                <div className="relative">
-                  <Barcode className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-                  <Input value={form.asset_tag} onChange={e => update('asset_tag', e.target.value)} placeholder="AF-0001 o haz clic en Generar" className="rounded-xl pl-9 font-mono" />
-                </div>
-                {form.asset_tag && <p className="text-[11px] text-muted-foreground">Al guardar se mostrará la etiqueta para imprimir</p>}
-              </div>
 
-              <div className="grid sm:grid-cols-2 gap-4">
-                <div className="space-y-1.5">
-                  <Label className="text-xs">Service Tag</Label>
-                  <Input value={form.service_tag} onChange={e => update('service_tag', e.target.value)} placeholder="ABC1234" className="rounded-xl" />
+                <div className="grid sm:grid-cols-2 gap-4">
+                  <div className="space-y-1.5">
+                    <Label className="text-xs">Service Tag</Label>
+                    <Input value={form.service_tag} onChange={e => update('service_tag', e.target.value)} placeholder="ABC1234" className="rounded-xl" />
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label className="text-xs">Número de Serie</Label>
+                    <Input value={form.serial_number} onChange={e => update('serial_number', e.target.value)} placeholder="SN-12345" className="rounded-xl" />
+                  </div>
                 </div>
                 <div className="space-y-1.5">
-                  <Label className="text-xs">Número de Serie</Label>
-                  <Input value={form.serial_number} onChange={e => update('serial_number', e.target.value)} placeholder="SN-12345" className="rounded-xl" />
+                  <Label className="text-xs">Notas</Label>
+                  <Textarea value={form.notes} onChange={e => update('notes', e.target.value)} placeholder="Notas adicionales..." className="rounded-xl" rows={2} />
                 </div>
               </div>
-              <div className="space-y-1.5">
-                <Label className="text-xs">Notas</Label>
-                <Textarea value={form.notes} onChange={e => update('notes', e.target.value)} placeholder="Notas adicionales..." className="rounded-xl" rows={2} />
+            ) : (
+              <div className="glass-card rounded-2xl p-5 space-y-4">
+                <h2 className="text-sm font-semibold">{isFood ? 'Detalles del Producto' : 'Detalles del Insumo'}</h2>
+                <div className="grid sm:grid-cols-2 gap-4">
+                  <div className="space-y-1.5">
+                    <Label className="text-xs">Marca / Proveedor</Label>
+                    <Input value={form.brand} onChange={e => update('brand', e.target.value)} placeholder={isFood ? 'Ej: Nestlé' : 'Ej: Office Depot'} className="rounded-xl" />
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label className="text-xs">{isFood ? 'Presentación' : 'Modelo / Referencia'}</Label>
+                    <Input value={form.model} onChange={e => update('model', e.target.value)} placeholder={isFood ? 'Ej: Caja 24 uds' : 'Ej: Resma carta'} className="rounded-xl" />
+                  </div>
+                </div>
+                <div className="space-y-1.5">
+                  <Label className="text-xs">Notas</Label>
+                  <Textarea value={form.notes} onChange={e => update('notes', e.target.value)} placeholder="Notas adicionales..." className="rounded-xl" rows={2} />
+                </div>
               </div>
-            </div>
+            )}
 
             <div className="flex gap-3">
               <Button type="button" variant="outline" className="rounded-xl flex-1" onClick={() => navigate('/inventory')}>Cancelar</Button>

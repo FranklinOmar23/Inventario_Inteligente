@@ -6,19 +6,26 @@ const router = Router();
 router.use(authenticate);
 const h = fn => (req, res, next) => Promise.resolve(fn(req, res, next)).catch(next);
 
-// Admin can pass ?sucursal_id=X to filter; non-admin always filtered to their sucursal
+const tid = req => req.user.tenant_id;
+
+// Admin can pass ?sucursal_id=X; non-admin always filtered to their sucursal
 const forced = req =>
   req.user.role !== 'admin'
     ? req.user.sucursal_id
     : (req.query.sucursal_id || null);
 
-// ── GET /api/reports/summary ──────────────────────────────────────────────────
+function buildWhere(req, base = 'deleted_at IS NULL') {
+  const p = [];
+  let w = base;
+  if (tid(req)) { w += ' AND tenant_id = ?'; p.push(tid(req)); }
+  const fs = forced(req);
+  if (fs) { w += ' AND sucursal_id = ?'; p.push(fs); }
+  return { w, p };
+}
+
 router.get('/summary', h(async (req, res) => {
   const db = getDB();
-  const fs = forced(req);
-  const p  = [];
-  let  w   = 'deleted_at IS NULL';
-  if (fs) { w += ' AND sucursal_id = ?'; p.push(fs); }
+  const { w, p } = buildWhere(req);
 
   const [[s]] = await db.execute(`
     SELECT
@@ -30,19 +37,16 @@ router.get('/summary', h(async (req, res) => {
       COALESCE(SUM(CASE WHEN status='damaged'     THEN quantity ELSE 0 END),0)    AS damaged,
       COALESCE(SUM(CASE WHEN status='retired'     THEN quantity ELSE 0 END),0)    AS retired,
       COALESCE(SUM(CASE WHEN status='revision'    THEN quantity ELSE 0 END),0)    AS revision,
-      COUNT(DISTINCT category_id)                                                 AS categories
+      COUNT(DISTINCT category_id)                                                 AS categories,
+      COALESCE(SUM(quantity * COALESCE(unit_cost,0)),0)                           AS total_value
     FROM inventory_items WHERE ${w}
   `, p);
   res.json(s);
 }));
 
-// ── GET /api/reports/by-status ────────────────────────────────────────────────
 router.get('/by-status', h(async (req, res) => {
   const db = getDB();
-  const fs = forced(req);
-  const p  = [];
-  let  w   = 'deleted_at IS NULL';
-  if (fs) { w += ' AND sucursal_id = ?'; p.push(fs); }
+  const { w, p } = buildWhere(req);
 
   const [rows] = await db.execute(`
     SELECT status,
@@ -54,13 +58,9 @@ router.get('/by-status', h(async (req, res) => {
   res.json(rows);
 }));
 
-// ── GET /api/reports/by-category ──────────────────────────────────────────────
 router.get('/by-category', h(async (req, res) => {
   const db = getDB();
-  const fs = forced(req);
-  const p  = [];
-  let  w   = 'deleted_at IS NULL';
-  if (fs) { w += ' AND sucursal_id = ?'; p.push(fs); }
+  const { w, p } = buildWhere(req);
 
   const [rows] = await db.execute(`
     SELECT COALESCE(NULLIF(category_name,''), 'Sin categoría') AS name,
@@ -72,20 +72,22 @@ router.get('/by-category', h(async (req, res) => {
   res.json(rows);
 }));
 
-// ── GET /api/reports/by-sucursal ──────────────────────────────────────────────
 router.get('/by-sucursal', h(async (req, res) => {
   const db = getDB();
+  const p = [];
+  let w = 'deleted_at IS NULL';
+  if (tid(req)) { w += ' AND tenant_id = ?'; p.push(tid(req)); }
+
   const [rows] = await db.execute(`
     SELECT COALESCE(NULLIF(sucursal_name,''), 'Sin sucursal') AS name,
            COUNT(*)                                            AS items,
            COALESCE(SUM(quantity), 0)                         AS quantity
-    FROM inventory_items WHERE deleted_at IS NULL
+    FROM inventory_items WHERE ${w}
     GROUP BY sucursal_name ORDER BY quantity DESC
-  `);
+  `, p);
   res.json(rows);
 }));
 
-// ── GET /api/reports/activity?days=30 ────────────────────────────────────────
 router.get('/activity', h(async (req, res) => {
   const db   = getDB();
   const days = Math.min(parseInt(req.query.days) || 30, 90);
@@ -93,6 +95,7 @@ router.get('/activity', h(async (req, res) => {
   const p    = [days];
   let   w    = `timestamp >= DATE_SUB(NOW(), INTERVAL ? DAY)
                 AND action IN ('entry','checkout','return')`;
+  if (tid(req)) { w += ' AND tenant_id = ?'; p.push(tid(req)); }
   if (fs) {
     w += ` AND item_id IN (
             SELECT id FROM inventory_items WHERE sucursal_id = ? AND deleted_at IS NULL)`;
@@ -108,7 +111,6 @@ router.get('/activity', h(async (req, res) => {
     ORDER BY date ASC
   `, p);
 
-  // Build a full date range filled with zeros
   const map = {};
   for (let i = days - 1; i >= 0; i--) {
     const d = new Date();
@@ -120,12 +122,12 @@ router.get('/activity', h(async (req, res) => {
   res.json(Object.values(map));
 }));
 
-// ── GET /api/reports/by-estante ───────────────────────────────────────────────
 router.get('/by-estante', h(async (req, res) => {
   const db = getDB();
   const fs = forced(req);
   const p  = [];
   let  w   = 'e.deleted_at IS NULL';
+  if (tid(req)) { w += ' AND e.tenant_id = ?'; p.push(tid(req)); }
   if (fs) { w += ' AND e.sucursal_id = ?'; p.push(fs); }
 
   const [rows] = await db.execute(`
@@ -141,12 +143,44 @@ router.get('/by-estante', h(async (req, res) => {
   res.json(rows);
 }));
 
-// ── GET /api/reports/top-items ────────────────────────────────────────────────
+router.get('/exits', h(async (req, res) => {
+  const db   = getDB();
+  const days = Math.min(parseInt(req.query.days) || 30, 365);
+  const fs   = forced(req);
+  const p    = [days];
+  let   w    = `action = 'exit' AND timestamp >= DATE_SUB(NOW(), INTERVAL ? DAY)`;
+  if (tid(req)) { w += ' AND tenant_id = ?'; p.push(tid(req)); }
+  if (fs) {
+    w += ` AND item_id IN (
+            SELECT id FROM inventory_items WHERE sucursal_id = ? AND deleted_at IS NULL)`;
+    p.push(fs);
+  }
+
+  const [[summary]] = await db.execute(`
+    SELECT COUNT(*)                       AS count,
+           COALESCE(SUM(quantity), 0)     AS quantity,
+           COALESCE(SUM(total_value), 0)  AS total_value
+    FROM activity_logs WHERE ${w}
+  `, p);
+
+  const [byReason] = await db.execute(`
+    SELECT COALESCE(NULLIF(reason,''), 'Sin especificar') AS reason,
+           COUNT(*)                                        AS count,
+           COALESCE(SUM(quantity), 0)                      AS quantity,
+           COALESCE(SUM(total_value), 0)                   AS total_value
+    FROM activity_logs WHERE ${w}
+    GROUP BY reason ORDER BY quantity DESC
+  `, p);
+
+  res.json({ summary, by_reason: byReason });
+}));
+
 router.get('/top-items', h(async (req, res) => {
   const db = getDB();
   const fs = forced(req);
   const p  = [];
-  let  w   = 'l.action IN (\'checkout\',\'entry\')';
+  let  w   = "l.action IN ('checkout','entry')";
+  if (tid(req)) { w += ' AND l.tenant_id = ?'; p.push(tid(req)); }
   if (fs) {
     w += ` AND l.item_id IN (
             SELECT id FROM inventory_items WHERE sucursal_id = ? AND deleted_at IS NULL)`;

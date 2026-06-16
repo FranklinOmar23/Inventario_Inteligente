@@ -8,7 +8,7 @@ import { format, parseISO } from 'date-fns';
 import { es } from 'date-fns/locale';
 import {
   BarChart2, Package, CheckCircle2, ArrowUpFromLine, Layers, Tags,
-  Printer, TrendingUp, Activity, PieChart as PieIcon, LayoutGrid,
+  Printer, TrendingUp, Activity, PieChart as PieIcon, LayoutGrid, DollarSign,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -109,7 +109,8 @@ const DonutLabel = ({ viewBox, total }) => {
 
 export default function Reports() {
   const { theme } = useTheme();
-  const { user }  = useAuth();
+  const { user, tenant } = useAuth();
+  const isValued  = tenant?.inventory_type === 'valued';
   const isDark    = theme === 'dark';
   const [days, setDays] = useState('30');
 
@@ -133,6 +134,13 @@ export default function Reports() {
     queryKey: ['rep-activity', days],
     queryFn: () => api.get(`/reports/activity?days=${days}`).then(r => r.data),
     staleTime: 30_000,
+  });
+  const isPhysical = tenant?.inventory_type === 'physical';
+  const { data: exits,      isLoading: lExit } = useQuery({
+    queryKey: ['rep-exits', days],
+    queryFn: () => api.get(`/reports/exits?days=${days}`).then(r => r.data),
+    staleTime: 30_000,
+    enabled: !isPhysical,
   });
 
   // Status data enriched with config
@@ -165,7 +173,7 @@ export default function Reports() {
       />
 
       {/* ── Summary cards ──────────────────────────────────────────────── */}
-      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3">
+      <div className={`grid grid-cols-2 md:grid-cols-3 ${isValued ? 'lg:grid-cols-6' : 'lg:grid-cols-5'} gap-3`}>
         {lSum ? (
           <>{[0,1,2,3,4].map(i => <SkeletonStat key={i} />)}</>
         ) : (
@@ -175,6 +183,13 @@ export default function Reports() {
             <MiniStat label="En uso"          value={summary?.checked_out} icon={ArrowUpFromLine} color="text-amber-500"    delay={120} />
             <MiniStat label="Ítems únicos"    value={summary?.items}       icon={Layers}          color="text-blue-500"     delay={180} />
             <MiniStat label="Categorías"      value={summary?.categories}  icon={Tags}            color="text-violet-500"   delay={240} />
+            {isValued && (
+              <MiniStat
+                label="Valor total"
+                value={summary?.total_value != null ? `RD$${Number(summary.total_value).toLocaleString('es-DO', { minimumFractionDigits: 2 })}` : null}
+                icon={DollarSign} color="text-emerald-600" delay={300}
+              />
+            )}
           </>
         )}
       </div>
@@ -363,6 +378,52 @@ export default function Reports() {
           )}
         </ChartCard>
       </div>
+
+      {/* ── Salidas de Mercancía (no aplica a Inventario Físico) ───────── */}
+      {!isPhysical && (
+      <div className="grid lg:grid-cols-5 gap-6">
+        <div className="lg:col-span-2 grid grid-cols-1 gap-3">
+          {lExit ? (
+            <>{[0,1].map(i => <SkeletonStat key={i} />)}</>
+          ) : (
+            <>
+              <MiniStat label="Salidas registradas" value={exits?.summary?.count}    icon={ArrowUpFromLine} color="text-rose-500"  delay={0}  />
+              <MiniStat label="Unidades de salida"   value={exits?.summary?.quantity} icon={Package}         color="text-amber-500" delay={60} />
+              {isValued && (
+                <MiniStat
+                  label="Valor de salidas"
+                  value={exits?.summary?.total_value != null ? `RD$${Number(exits.summary.total_value).toLocaleString('es-DO', { minimumFractionDigits: 2 })}` : null}
+                  icon={DollarSign} color="text-rose-600" delay={120}
+                />
+              )}
+            </>
+          )}
+        </div>
+
+        <ChartCard title="Salidas por Motivo" icon={ArrowUpFromLine} className="lg:col-span-3" style={{ '--delay': '320ms' }}>
+          {lExit ? (
+            <Skeleton className="h-52 w-full rounded-xl" />
+          ) : !exits?.by_reason?.length ? (
+            <p className="text-sm text-muted-foreground text-center py-10">Sin salidas registradas en este período</p>
+          ) : (
+            <ResponsiveContainer width="100%" height={Math.max(200, exits.by_reason.length * 38)}>
+              <BarChart layout="vertical" data={exits.by_reason} margin={{ top: 0, right: 60, left: 4, bottom: 0 }}>
+                <CartesianGrid strokeDasharray="3 3" stroke={gridColor} horizontal={false} />
+                <XAxis type="number" {...axisProps} allowDecimals={false} />
+                <YAxis type="category" dataKey="reason" width={130} {...axisProps} tick={{ ...axisProps.tick, fontSize: 12 }} />
+                <Tooltip content={<ChartTooltip />} />
+                <Bar dataKey="quantity" name="Cantidad" radius={[0, 6, 6, 0]} animationDuration={800}>
+                  {exits.by_reason.map((_, i) => (
+                    <Cell key={i} fill={CAT_COLORS[i % CAT_COLORS.length]} />
+                  ))}
+                  <LabelList dataKey="quantity" position="right" style={{ fill: textColor, fontSize: 11, fontWeight: 600 }} />
+                </Bar>
+              </BarChart>
+            </ResponsiveContainer>
+          )}
+        </ChartCard>
+      </div>
+      )}
 
       {/* ── By estante ─────────────────────────────────────────────────── */}
       {(byEstante?.length > 0 || lEst) && (

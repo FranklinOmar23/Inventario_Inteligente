@@ -11,19 +11,26 @@ function fmt(d) {
 }
 
 // ─── Label layout ─────────────────────────────────────────────────────────────
-// W=72mm H=90mm — all sections use explicit heights so nothing overflows to page 2.
-// forPrint=true  → mm units (for actual printing)
-// forPrint=false → px units scaled 3:1 (216px x 270px) for screen preview
-function LabelContent({ item, forPrint }) {
-  const u = forPrint ? 'mm' : 'px';
-  const m = forPrint ? 1 : 3; // 1mm → 3px for screen preview
+// The physical label roll is mounted sideways in the printer: sending a
+// landscape (101.6×76.2mm) page prints at the correct total size (confirmed —
+// no overflow onto the next label) but the content comes out rotated 90°.
+// Sending a portrait (76.2×101.6mm) page keeps the content upright but is
+// taller than one physical label, so it spills onto the next one.
+// Fix: author the content as a portrait card (CARD_*), then for printing
+// pre-rotate it 90° so the hardware's own rotation cancels out, while the
+// outer @page stays landscape (PAGE_*) matching the proven-correct physical size.
+const PAGE_WIDTH_MM  = 50.6; // 4in — true physical label size (landscape)
+const PAGE_HEIGHT_MM = 45.2;  // 3in
+const CARD_WIDTH_MM  = PAGE_HEIGHT_MM; // 76.2mm — portrait card, swapped
+const CARD_HEIGHT_MM = PAGE_WIDTH_MM;  // 101.6mm
 
+function LabelCard({ item, forPrint, m, u }) {
   const qrValue = item.id;
-  const QR_SIZE = forPrint ? Math.round(28 * 3.78) : 28 * m; // 28mm QR
+  const QR_SIZE = forPrint ? Math.round(32 * 3.78) : 32 * m; // 32mm QR
 
   return (
     <div style={{
-      width: `${72 * m}${u}`, height: `${72 * m}${u}`,
+      width: `${CARD_WIDTH_MM * m}${u}`, height: `${CARD_HEIGHT_MM * m}${u}`,
       fontFamily: 'Arial, Helvetica, sans-serif',
       display: 'flex', flexDirection: 'column',
       alignItems: 'center', justifyContent: 'center',
@@ -31,10 +38,8 @@ function LabelContent({ item, forPrint }) {
       boxSizing: 'border-box',
       background: '#fff',
       overflow: 'hidden',
-      pageBreakInside: 'avoid',
-      breakInside: 'avoid',
-      padding: `${4 * m}${u}`,
-      gap: `${2.5 * m}${u}`,
+      padding: `${5 * m}${u}`,
+      gap: `${3 * m}${u}`,
       textAlign: 'center',
     }}>
 
@@ -43,7 +48,7 @@ function LabelContent({ item, forPrint }) {
 
       {/* Nombre */}
       <div style={{
-        fontSize: forPrint ? '9pt' : `${9 * m / 3}px`,
+        fontSize: forPrint ? '13pt' : `${13 * m / 3}px`,
         fontWeight: 900, lineHeight: 1.2,
         overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
         maxWidth: '100%',
@@ -52,15 +57,43 @@ function LabelContent({ item, forPrint }) {
       </div>
 
       {/* Fecha + Sucursal */}
-      <div style={{ display: 'flex', flexDirection: 'column', gap: `${0.8 * m}${u}`, alignItems: 'center' }}>
-        <div style={{ fontSize: forPrint ? '7pt' : `${7 * m / 3}px`, color: '#444' }}>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: `${1 * m}${u}`, alignItems: 'center' }}>
+        <div style={{ fontSize: forPrint ? '9pt' : `${9 * m / 3}px`, color: '#444' }}>
           {fmt(item.entry_date) || '—'}
         </div>
-        <div style={{ fontSize: forPrint ? '6pt' : `${6 * m / 3}px`, color: '#888' }}>
+        <div style={{ fontSize: forPrint ? '8pt' : `${8 * m / 3}px`, color: '#888' }}>
           {item.sucursal_name || 'Sede Principal'}
         </div>
       </div>
 
+    </div>
+  );
+}
+
+function LabelContent({ item, forPrint }) {
+  const u = forPrint ? 'mm' : 'px';
+  const m = forPrint ? 1 : 2; // 1mm → 2px for screen preview
+
+  const card = <LabelCard item={item} forPrint={forPrint} m={m} u={u} />;
+
+  // Screen preview: show the card as-is (no hardware rotation to compensate for).
+  if (!forPrint) return card;
+
+  // Print: pre-rotate 90° so it lands upright once the printer's own mounting rotation applies.
+  return (
+    <div style={{
+      width: `${PAGE_WIDTH_MM}mm`, height: `${PAGE_HEIGHT_MM}mm`,
+      position: 'relative', overflow: 'hidden',
+      pageBreakInside: 'avoid', breakInside: 'avoid',
+    }}>
+      <div style={{
+        position: 'absolute', top: 0, left: 0,
+        width: `${CARD_WIDTH_MM}mm`, height: `${CARD_HEIGHT_MM}mm`,
+        transformOrigin: 'top left',
+        transform: 'rotate(90deg) translateY(-100%)',
+      }}>
+        {card}
+      </div>
     </div>
   );
 }
@@ -75,7 +108,7 @@ export default function LabelPrintModal({ open, onClose, item }) {
     style.id = STYLE_ID;
     style.textContent = `
       @media print {
-        @page { size: 80mm 70mm; margin: 0mm; }
+        @page { size: ${PAGE_WIDTH_MM}mm ${PAGE_HEIGHT_MM}mm; margin: 0mm; }
         body > *                { display: none !important; }
         body > #${PRINT_ID}    { display: block !important; position: fixed; top: 0; left: 0; }
       }
@@ -118,7 +151,7 @@ export default function LabelPrintModal({ open, onClose, item }) {
             </DialogTitle>
           </DialogHeader>
 
-          <p className="text-xs text-muted-foreground -mt-2">Formato 72 × 90 mm · impresora térmica</p>
+          <p className="text-xs text-muted-foreground mt-1">Formato 4 × 3 in (impresora térmica)</p>
 
           <div className="text-[11px] bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 text-amber-800">
             <strong>Tip Chrome:</strong> En el diálogo → <em>Más configuraciones</em> → desactiva <em>"Encabezados y pies de página"</em>.

@@ -2,14 +2,15 @@ import React, { useState } from 'react';
 import { NavLink, useNavigate } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import {
-  LayoutDashboard, Package, ArrowDownToLine, ArrowLeftRight,
+  LayoutDashboard, Package, ArrowDownToLine, ArrowLeftRight, ArrowUpFromLine,
   ShoppingCart, History, Tags, LogOut, ChevronLeft, ChevronRight,
-  Box, MapPin, Building2, ChevronDown, AlertOctagon, Sun, Moon, Users, LayoutGrid, BarChart2,
+  Box, MapPin, Building2, ChevronDown, AlertOctagon, Sun, Moon, Users, LayoutGrid, BarChart2, Crown, User,
 } from 'lucide-react';
 import { useAuth } from '@/context/AuthContext';
 import { useTheme } from '@/context/ThemeContext';
 import { cn } from '@/lib/utils';
 import api from '@/api/client';
+import NotificationsBell from './NotificationsBell';
 
 // permission = null means always visible
 const MAIN_NAV = [
@@ -17,6 +18,7 @@ const MAIN_NAV = [
   { to: '/inventory',       label: 'Inventario',        icon: Package,          permission: 'inventory' },
   { to: '/entry',           label: 'Entrada',           icon: ArrowDownToLine,  permission: 'entry' },
   { to: '/checkout',        label: 'Traspaso',          icon: ArrowLeftRight,   permission: 'checkout' },
+  { to: '/salida',          label: 'Salida',            icon: ArrowUpFromLine,  permission: 'salida', hideForPhysical: true },
   { to: '/purchase-orders', label: 'Órdenes de Compra', icon: ShoppingCart,     permission: 'purchase_orders' },
   { to: '/logs',            label: 'Historial',         icon: History,          permission: 'logs' },
   { to: '/categories',      label: 'Categorías',        icon: Tags,             permission: 'categories' },
@@ -24,8 +26,11 @@ const MAIN_NAV = [
   { to: '/reports',         label: 'Reportes',          icon: BarChart2,        permission: null },
 ];
 
+const PLAN_LABEL = { starter: 'Starter', pro: 'Pro', enterprise: 'Enterprise' };
+const PLAN_COLOR = { starter: 'text-primary', pro: 'text-violet-400', enterprise: 'text-amber-400' };
+
 export default function Sidebar() {
-  const { logout, user } = useAuth();
+  const { logout, user, tenant } = useAuth();
   const { theme, toggleTheme } = useTheme();
   const navigate = useNavigate();
   const [collapsed, setCollapsed] = useState(false);
@@ -69,21 +74,34 @@ export default function Sidebar() {
       )}
     >
       {/* Logo */}
-      <div className="flex items-center gap-2.5 px-4 py-4 border-b border-white/10">
-        <div className="w-8 h-8 rounded-lg bg-primary flex items-center justify-center shrink-0">
-          <Box className="w-4 h-4 text-white" />
+      <div className="border-b border-white/10">
+        <div className="flex items-center gap-2.5 px-4 py-4">
+          <div className="w-8 h-8 rounded-lg bg-primary flex items-center justify-center shrink-0">
+            <Box className="w-4 h-4 text-white" />
+          </div>
+          {!collapsed && (
+            <>
+              <div className="overflow-hidden flex-1">
+                <p className="text-sm font-bold leading-none">InvenAI</p>
+                <p className="text-[10px] text-white/50 uppercase tracking-wider">Smart Inventory</p>
+              </div>
+              <NotificationsBell collapsed={collapsed} />
+            </>
+          )}
         </div>
-        {!collapsed && (
-          <div className="overflow-hidden">
-            <p className="text-sm font-bold leading-none">InvenAI</p>
-            <p className="text-[10px] text-white/50 uppercase tracking-wider">Smart Inventory</p>
+        {collapsed && (
+          <div className="flex justify-center pb-3">
+            <NotificationsBell collapsed={collapsed} />
           </div>
         )}
       </div>
 
       {/* Nav */}
       <nav className="flex-1 overflow-y-auto py-3 px-2 space-y-0.5">
-        {MAIN_NAV.filter(item => canSee(item.permission)).map(({ to, label, icon: Icon }) => (
+        {MAIN_NAV
+          .filter(item => canSee(item.permission))
+          .filter(item => !(item.hideForPhysical && tenant?.inventory_type === 'physical'))
+          .map(({ to, label, icon: Icon }) => (
           <NavLink
             key={to}
             to={to}
@@ -193,10 +211,31 @@ export default function Sidebar() {
       {/* Footer */}
       <div className="px-2 pb-4 space-y-0.5 border-t border-white/10 pt-3">
         {!collapsed && user && (
-          <div className="px-2 py-2 mb-1">
+          <NavLink
+            to="/profile"
+            className={({ isActive }) => cn('block px-2 py-2 mb-1 rounded-lg hover:bg-white/5 transition-colors', isActive && 'bg-white/10')}
+          >
+            {tenant && (
+              <div className="flex items-center gap-1.5 mb-1">
+                <Crown className={`w-2.5 h-2.5 shrink-0 ${PLAN_COLOR[tenant.plan] || 'text-primary'}`} />
+                <span className={`text-[10px] font-semibold uppercase tracking-wide ${PLAN_COLOR[tenant.plan] || 'text-primary'}`}>
+                  {PLAN_LABEL[tenant.plan] || tenant.plan}
+                </span>
+                <span className="text-[10px] text-white/30 truncate">· {tenant.name}</span>
+              </div>
+            )}
             <p className="text-xs font-medium text-white/80 truncate">{user.full_name}</p>
             <p className="text-[10px] text-white/40 truncate">{user.role === 'admin' ? 'Administrador' : 'Usuario'}</p>
-          </div>
+          </NavLink>
+        )}
+        {collapsed && user && (
+          <NavLink
+            to="/profile"
+            className={({ isActive }) => cn('sidebar-item w-full justify-center', isActive ? 'active' : 'text-white/70')}
+            title="Mi Perfil"
+          >
+            <User className="w-4 h-4 shrink-0" />
+          </NavLink>
         )}
         <button
           onClick={toggleTheme}

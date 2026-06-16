@@ -1,13 +1,13 @@
 import nodemailer from 'nodemailer';
 
-function createTransporter() {
+function createTransporter(smtp) {
   return nodemailer.createTransport({
-    host:   process.env.SMTP_HOST || 'smtp.gmail.com',
-    port:   Number(process.env.SMTP_PORT) || 587,
-    secure: process.env.SMTP_SECURE === 'true',
+    host:   smtp.host || 'smtp.gmail.com',
+    port:   Number(smtp.port) || 587,
+    secure: !!smtp.secure,
     auth: {
-      user: process.env.SMTP_USER,
-      pass: process.env.SMTP_PASS,
+      user: smtp.user,
+      pass: smtp.pass,
     },
   });
 }
@@ -21,9 +21,10 @@ function createTransporter() {
  * @param {string}   opts.motive       - e.g. "Operativo Semana Santa 2026"
  * @param {Array}    opts.items        - [{ quantity, description }]
  * @param {string}   [opts.notes]      - optional additional notes
+ * @param {object}   opts.smtp         - per-tenant SMTP config: { host, port, secure, user, pass, fromName }
  */
-export async function sendRequisitionEmail({ to, managerName, senderName, motive, items, notes }) {
-  const transporter = createTransporter();
+export async function sendRequisitionEmail({ to, managerName, senderName, motive, items, notes, smtp }) {
+  const transporter = createTransporter(smtp);
 
   const today = new Date().toLocaleDateString('es-DO', {
     weekday: 'long', year: 'numeric', month: 'long', day: 'numeric',
@@ -128,7 +129,7 @@ InvenAI – Sistema de Inventario`;
 </html>`;
 
   await transporter.sendMail({
-    from:    `"${process.env.SMTP_FROM_NAME || 'InvenAI'}" <${process.env.SMTP_USER}>`,
+    from:    `"${smtp.fromName || 'InvenAI'}" <${smtp.user}>`,
     to,
     subject: `Solicitud de Requerimiento – ${motive}`,
     text:    textBody,

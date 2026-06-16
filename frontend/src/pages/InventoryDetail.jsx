@@ -4,7 +4,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   ArrowLeft, Package, Barcode, Printer, Building2, Tag,
   Hash, Calendar, Trash2, Loader2, AlertCircle, RefreshCw, AlertTriangle,
-  LayoutGrid, Clock, Layers,
+  LayoutGrid, Clock, Layers, Pencil, DollarSign,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -98,7 +98,8 @@ export default function InventoryDetail() {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const { toast } = useToast();
-  const { user } = useAuth();
+  const { user, tenant } = useAuth();
+  const isValued = tenant?.inventory_type === 'valued';
 
   const [barcodeOpen, setBarcodeOpen] = useState(false);
   const [labelOpen,   setLabelOpen]   = useState(false);
@@ -109,6 +110,9 @@ export default function InventoryDetail() {
   const [shelfOpen, setShelfOpen] = useState(false);
   const [selectedShelfId, setSelectedShelfId] = useState('');
   const [savingShelf, setSavingShelf] = useState(false);
+  const [editOpen, setEditOpen] = useState(false);
+  const [editForm, setEditForm] = useState(null);
+  const [savingEdit, setSavingEdit] = useState(false);
 
   const { data: item, isLoading, isError, refetch } = useQuery({
     queryKey: ['inventory', id],
@@ -126,6 +130,76 @@ export default function InventoryDetail() {
     queryKey: ['estantes'],
     queryFn: () => api.get('/estantes').then(r => r.data),
   });
+
+  const { data: categories = [] } = useQuery({
+    queryKey: ['categories'],
+    queryFn: () => api.get('/categories').then(r => r.data),
+    staleTime: 60_000,
+  });
+
+  const { data: departments = [] } = useQuery({
+    queryKey: ['departments'],
+    queryFn: () => api.get('/departments').then(r => r.data),
+    staleTime: 60_000,
+  });
+
+  const openEditDialog = () => {
+    if (!item) return;
+    setEditForm({
+      name:          item.name,
+      category_id:   item.category_id   || '',
+      category_name: item.category_name || '',
+      department_id: item.department_id || '',
+      department_name: item.department_name || '',
+      brand:         item.brand         || '',
+      model:         item.model         || '',
+      asset_tag:     item.asset_tag     || '',
+      service_tag:   item.service_tag   || '',
+      serial_number: item.serial_number || '',
+      quantity:      item.quantity      ?? 1,
+      unit_cost:     item.unit_cost     ?? '',
+      description:   item.description   || '',
+      notes:         item.notes         || '',
+      entry_date:    item.entry_date    ? item.entry_date.slice(0, 10) : '',
+    });
+    setEditOpen(true);
+  };
+
+  const handleSaveEdit = async () => {
+    if (!editForm?.name) return;
+    setSavingEdit(true);
+    try {
+      const cat = categories.find(c => c.id === editForm.category_id);
+      const dept = departments.find(d => d.id === editForm.department_id);
+      await api.put(`/inventory/${id}`, {
+        ...item,
+        name:           editForm.name,
+        category_id:    editForm.category_id   || null,
+        category_name:  cat?.name              || editForm.category_name || '',
+        department_id:  editForm.department_id || null,
+        department_name: dept?.name            || editForm.department_name || '',
+        brand:          editForm.brand,
+        model:          editForm.model,
+        asset_tag:      editForm.asset_tag,
+        service_tag:    editForm.service_tag,
+        serial_number:  editForm.serial_number,
+        quantity:       Number(editForm.quantity) || 1,
+        unit_cost:      editForm.unit_cost !== '' ? Number(editForm.unit_cost) : null,
+        description:    editForm.description,
+        notes:          editForm.notes,
+        entry_date:     editForm.entry_date || null,
+      });
+      queryClient.invalidateQueries({ queryKey: ['inventory', id] });
+      queryClient.invalidateQueries({ queryKey: ['inventory'] });
+      setEditOpen(false);
+      toast({ title: 'Item actualizado', description: editForm.name });
+      refetch();
+    } catch (err) {
+      toast({ title: 'Error al guardar', description: err.response?.data?.error || 'Error', variant: 'destructive' });
+    } finally {
+      setSavingEdit(false);
+    }
+  };
 
   const openShelfDialog = () => {
     setSelectedShelfId(item?.shelf_id || '');
@@ -254,10 +328,19 @@ export default function InventoryDetail() {
           variant="outline"
           size="sm"
           className="rounded-xl gap-1.5"
+          onClick={openEditDialog}
+        >
+          <Pencil className="w-3.5 h-3.5" />
+          Editar
+        </Button>
+        <Button
+          variant="outline"
+          size="sm"
+          className="rounded-xl gap-1.5"
           onClick={openStatusDialog}
         >
           <RefreshCw className="w-3.5 h-3.5" />
-          Cambiar Estado
+          Estado
         </Button>
         <Button
           variant="destructive"
@@ -302,6 +385,33 @@ export default function InventoryDetail() {
         </div>
       </div>
 
+      {/* Value card — valued inventory only */}
+      {isValued && (
+        <div className="glass-card rounded-2xl p-5 mb-4">
+          <h2 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-2 flex items-center gap-1.5">
+            <DollarSign className="w-3.5 h-3.5" /> Valor del inventario
+          </h2>
+          <div className="grid sm:grid-cols-3 gap-3 mt-1">
+            <div>
+              <p className="text-[11px] text-muted-foreground">Costo unitario</p>
+              <p className="text-sm font-semibold mt-0.5">
+                {item.unit_cost != null ? `RD$${Number(item.unit_cost).toLocaleString('es-DO', { minimumFractionDigits: 2 })}` : 'Sin definir'}
+              </p>
+            </div>
+            <div>
+              <p className="text-[11px] text-muted-foreground">Cantidad</p>
+              <p className="text-sm font-semibold mt-0.5">{item.quantity}</p>
+            </div>
+            <div>
+              <p className="text-[11px] text-muted-foreground">Valor total</p>
+              <p className="text-sm font-semibold mt-0.5 text-primary">
+                {item.unit_cost != null ? `RD$${(Number(item.unit_cost) * item.quantity).toLocaleString('es-DO', { minimumFractionDigits: 2 })}` : '—'}
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
+
       <div className="grid sm:grid-cols-2 gap-4">
         {/* Identifiers */}
         <div className="glass-card rounded-2xl p-5">
@@ -309,7 +419,9 @@ export default function InventoryDetail() {
           <Field icon={Tag}  label="Activo Fijo"     value={item.asset_tag} />
           <Field icon={Hash} label="Service Tag"     value={item.service_tag} />
           <Field icon={Hash} label="Número de Serie" value={item.serial_number} />
-          {!item.asset_tag && !item.service_tag && !item.serial_number && (
+          <Field icon={Hash} label="Lote"            value={item.batch_number} />
+          <Field icon={Tag}  label="Unidad de Medida" value={item.unit_measure} />
+          {!item.asset_tag && !item.service_tag && !item.serial_number && !item.batch_number && !item.unit_measure && (
             <p className="text-xs text-muted-foreground py-2">Sin identificadores registrados</p>
           )}
         </div>
@@ -320,6 +432,7 @@ export default function InventoryDetail() {
           <Field icon={Building2} label="Departamento"     value={item.department_name} />
           <Field icon={Building2} label="Sucursal"         value={item.sucursal_name} />
           <Field icon={Calendar}  label="Fecha de entrada" value={item.entry_date ? new Date(item.entry_date).toLocaleDateString('es-DO') : null} />
+          <Field icon={Calendar}  label="Fecha de caducidad" value={item.expiration_date ? new Date(item.expiration_date).toLocaleDateString('es-DO') : null} />
           {/* Shelf */}
           <div className="flex items-start gap-3 py-3 border-t border-border mt-1">
             <div className="w-8 h-8 rounded-lg bg-muted flex items-center justify-center flex-shrink-0 mt-0.5">
@@ -466,6 +579,140 @@ export default function InventoryDetail() {
               {savingShelf ? 'Guardando…' : 'Confirmar'}
             </Button>
           </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Full edit dialog */}
+      <Dialog open={editOpen} onOpenChange={setEditOpen}>
+        <DialogContent className="rounded-2xl max-w-2xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Pencil className="w-4 h-4 text-primary" /> Editar Item
+            </DialogTitle>
+          </DialogHeader>
+
+          {editForm && (
+            <div className="grid sm:grid-cols-2 gap-4 mt-2">
+              {/* Name */}
+              <div className="sm:col-span-2 space-y-1.5">
+                <Label className="text-xs">Nombre *</Label>
+                <Input value={editForm.name} onChange={e => setEditForm(p => ({ ...p, name: e.target.value }))}
+                  className="rounded-xl" placeholder="Nombre del item" />
+              </div>
+
+              {/* Category */}
+              <div className="space-y-1.5">
+                <Label className="text-xs">Categoría</Label>
+                <Select value={editForm.category_id || '__none__'}
+                  onValueChange={v => setEditForm(p => ({ ...p, category_id: v === '__none__' ? '' : v }))}>
+                  <SelectTrigger className="rounded-xl"><SelectValue placeholder="Sin categoría" /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="__none__">Sin categoría</SelectItem>
+                    {categories.map(c => <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              {/* Department */}
+              <div className="space-y-1.5">
+                <Label className="text-xs">Departamento</Label>
+                <Select value={editForm.department_id || '__none__'}
+                  onValueChange={v => setEditForm(p => ({ ...p, department_id: v === '__none__' ? '' : v }))}>
+                  <SelectTrigger className="rounded-xl"><SelectValue placeholder="Sin departamento" /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="__none__">Sin departamento</SelectItem>
+                    {departments.map(d => <SelectItem key={d.id} value={d.id}>{d.name}{d.sucursal_name ? ` · ${d.sucursal_name}` : ''}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              {/* Brand */}
+              <div className="space-y-1.5">
+                <Label className="text-xs">Marca</Label>
+                <Input value={editForm.brand} onChange={e => setEditForm(p => ({ ...p, brand: e.target.value }))}
+                  className="rounded-xl" placeholder="Marca" />
+              </div>
+
+              {/* Model */}
+              <div className="space-y-1.5">
+                <Label className="text-xs">Modelo</Label>
+                <Input value={editForm.model} onChange={e => setEditForm(p => ({ ...p, model: e.target.value }))}
+                  className="rounded-xl" placeholder="Modelo" />
+              </div>
+
+              {/* Asset tag */}
+              <div className="space-y-1.5">
+                <Label className="text-xs">Activo Fijo</Label>
+                <Input value={editForm.asset_tag} onChange={e => setEditForm(p => ({ ...p, asset_tag: e.target.value }))}
+                  className="rounded-xl" placeholder="Nº activo fijo" />
+              </div>
+
+              {/* Service tag */}
+              <div className="space-y-1.5">
+                <Label className="text-xs">Service Tag</Label>
+                <Input value={editForm.service_tag} onChange={e => setEditForm(p => ({ ...p, service_tag: e.target.value }))}
+                  className="rounded-xl" placeholder="Service tag" />
+              </div>
+
+              {/* Serial number */}
+              <div className="space-y-1.5">
+                <Label className="text-xs">Número de Serie</Label>
+                <Input value={editForm.serial_number} onChange={e => setEditForm(p => ({ ...p, serial_number: e.target.value }))}
+                  className="rounded-xl" placeholder="S/N" />
+              </div>
+
+              {/* Quantity */}
+              <div className="space-y-1.5">
+                <Label className="text-xs">Cantidad</Label>
+                <Input type="number" min={1} value={editForm.quantity}
+                  onChange={e => setEditForm(p => ({ ...p, quantity: e.target.value }))}
+                  className="rounded-xl" />
+              </div>
+
+              {/* Unit cost */}
+              <div className="space-y-1.5">
+                <Label className="text-xs flex items-center gap-1"><DollarSign className="w-3 h-3" /> Costo unitario (opcional)</Label>
+                <Input type="number" min={0} step="0.01" value={editForm.unit_cost}
+                  onChange={e => setEditForm(p => ({ ...p, unit_cost: e.target.value }))}
+                  className="rounded-xl" placeholder="0.00" />
+              </div>
+
+              {/* Entry date */}
+              <div className="space-y-1.5">
+                <Label className="text-xs">Fecha de entrada</Label>
+                <Input type="date" value={editForm.entry_date}
+                  onChange={e => setEditForm(p => ({ ...p, entry_date: e.target.value }))}
+                  className="rounded-xl" />
+              </div>
+
+              {/* Description */}
+              <div className="sm:col-span-2 space-y-1.5">
+                <Label className="text-xs">Descripción</Label>
+                <Textarea value={editForm.description}
+                  onChange={e => setEditForm(p => ({ ...p, description: e.target.value }))}
+                  className="rounded-xl" rows={2} placeholder="Descripción del item" />
+              </div>
+
+              {/* Notes */}
+              <div className="sm:col-span-2 space-y-1.5">
+                <Label className="text-xs">Observaciones</Label>
+                <Textarea value={editForm.notes}
+                  onChange={e => setEditForm(p => ({ ...p, notes: e.target.value }))}
+                  className="rounded-xl" rows={2} placeholder="Notas adicionales" />
+              </div>
+
+              <div className="sm:col-span-2 flex gap-2">
+                <Button variant="outline" className="flex-1 rounded-xl" onClick={() => setEditOpen(false)}>
+                  Cancelar
+                </Button>
+                <Button className="flex-1 rounded-xl" onClick={handleSaveEdit}
+                  disabled={savingEdit || !editForm.name}>
+                  {savingEdit ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : null}
+                  Guardar Cambios
+                </Button>
+              </div>
+            </div>
+          )}
         </DialogContent>
       </Dialog>
 

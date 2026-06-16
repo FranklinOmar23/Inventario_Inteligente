@@ -57,6 +57,8 @@ export default function Sucursales() {
       queryClient.invalidateQueries({ queryKey: ['departments'] });
       setOpen(false); setForm(EMPTY_SUC);
       toast({ title: 'Sucursal creada', description: `${form.name} — departamento "General" creado automáticamente` });
+    } catch (err) {
+      toast({ title: 'Error', description: err.response?.data?.error || 'No se pudo crear la sucursal', variant: 'destructive' });
     } finally { setSaving(false); }
   };
 

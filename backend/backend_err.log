@@ -1,0 +1,288 @@
+Error: connect ETIMEDOUT
+    at file:///C:/Users/odisla/Desktop/Inventario_Inteligente/backend/routes/logs.js:34:27
+    at file:///C:/Users/odisla/Desktop/Inventario_Inteligente/backend/routes/logs.js:7:64
+    at Layer.handle [as handle_request] (C:\Users\odisla\Desktop\Inventario_Inteligente\backend\node_modules\express\lib\router\layer.js:95:5)
+    at next (C:\Users\odisla\Desktop\Inventario_Inteligente\backend\node_modules\express\lib\router\route.js:149:13)
+    at Route.dispatch (C:\Users\odisla\Desktop\Inventario_Inteligente\backend\node_modules\express\lib\router\route.js:119:3)
+    at Layer.handle [as handle_request] (C:\Users\odisla\Desktop\Inventario_Inteligente\backend\node_modules\express\lib\router\layer.js:95:5)
+    at C:\Users\odisla\Desktop\Inventario_Inteligente\backend\node_modules\express\lib\router\index.js:284:15
+    at router.process_params (C:\Users\odisla\Desktop\Inventario_Inteligente\backend\node_modules\express\lib\router\index.js:346:12)
+    at next (C:\Users\odisla\Desktop\Inventario_Inteligente\backend\node_modules\express\lib\router\index.js:280:10)
+    at authenticate (file:///C:/Users/odisla/Desktop/Inventario_Inteligente/backend/middleware/auth.js:11:5) {
+  errorno: 'ETIMEDOUT',
+  code: 'ETIMEDOUT',
+  syscall: 'connect',
+  fatal: true
+}
+Error: connect ETIMEDOUT
+    at file:///C:/Users/odisla/Desktop/Inventario_Inteligente/backend/routes/logs.js:34:27
+    at file:///C:/Users/odisla/Desktop/Inventario_Inteligente/backend/routes/logs.js:7:64
+    at Layer.handle [as handle_request] (C:\Users\odisla\Desktop\Inventario_Inteligente\backend\node_modules\express\lib\router\layer.js:95:5)
+    at next (C:\Users\odisla\Desktop\Inventario_Inteligente\backend\node_modules\express\lib\router\route.js:149:13)
+    at Route.dispatch (C:\Users\odisla\Desktop\Inventario_Inteligente\backend\node_modules\express\lib\router\route.js:119:3)
+    at Layer.handle [as handle_request] (C:\Users\odisla\Desktop\Inventario_Inteligente\backend\node_modules\express\lib\router\layer.js:95:5)
+    at C:\Users\odisla\Desktop\Inventario_Inteligente\backend\node_modules\express\lib\router\index.js:284:15
+    at router.process_params (C:\Users\odisla\Desktop\Inventario_Inteligente\backend\node_modules\express\lib\router\index.js:346:12)
+    at next (C:\Users\odisla\Desktop\Inventario_Inteligente\backend\node_modules\express\lib\router\index.js:280:10)
+    at authenticate (file:///C:/Users/odisla/Desktop/Inventario_Inteligente/backend/middleware/auth.js:11:5) {
+  errorno: 'ETIMEDOUT',
+  code: 'ETIMEDOUT',
+  syscall: 'connect',
+  fatal: true
+}
+Error: connect ETIMEDOUT
+    at file:///C:/Users/odisla/Desktop/Inventario_Inteligente/backend/routes/logs.js:34:27
+    at file:///C:/Users/odisla/Desktop/Inventario_Inteligente/backend/routes/logs.js:7:64
+    at Layer.handle [as handle_request] (C:\Users\odisla\Desktop\Inventario_Inteligente\backend\node_modules\express\lib\router\layer.js:95:5)
+    at next (C:\Users\odisla\Desktop\Inventario_Inteligente\backend\node_modules\express\lib\router\route.js:149:13)
+    at Route.dispatch (C:\Users\odisla\Desktop\Inventario_Inteligente\backend\node_modules\express\lib\router\route.js:119:3)
+    at Layer.handle [as handle_request] (C:\Users\odisla\Desktop\Inventario_Inteligente\backend\node_modules\express\lib\router\layer.js:95:5)
+    at C:\Users\odisla\Desktop\Inventario_Inteligente\backend\node_modules\express\lib\router\index.js:284:15
+    at router.process_params (C:\Users\odisla\Desktop\Inventario_Inteligente\backend\node_modules\express\lib\router\index.js:346:12)
+    at next (C:\Users\odisla\Desktop\Inventario_Inteligente\backend\node_modules\express\lib\router\index.js:280:10)
+    at authenticate (file:///C:/Users/odisla/Desktop/Inventario_Inteligente/backend/middleware/auth.js:11:5) {
+  errorno: 'ETIMEDOUT',
+  code: 'ETIMEDOUT',
+  syscall: 'connect',
+  fatal: true
+}
+Error: connect ETIMEDOUT
+    at file:///C:/Users/odisla/Desktop/Inventario_Inteligente/backend/routes/logs.js:34:27
+    at file:///C:/Users/odisla/Desktop/Inventario_Inteligente/backend/routes/logs.js:7:64
+    at Layer.handle [as handle_request] (C:\Users\odisla\Desktop\Inventario_Inteligente\backend\node_modules\express\lib\router\layer.js:95:5)
+    at next (C:\Users\odisla\Desktop\Inventario_Inteligente\backend\node_modules\express\lib\router\route.js:149:13)
+    at Route.dispatch (C:\Users\odisla\Desktop\Inventario_Inteligente\backend\node_modules\express\lib\router\route.js:119:3)
+    at Layer.handle [as handle_request] (C:\Users\odisla\Desktop\Inventario_Inteligente\backend\node_modules\express\lib\router\layer.js:95:5)
+    at C:\Users\odisla\Desktop\Inventario_Inteligente\backend\node_modules\express\lib\router\index.js:284:15
+    at router.process_params (C:\Users\odisla\Desktop\Inventario_Inteligente\backend\node_modules\express\lib\router\index.js:346:12)
+    at next (C:\Users\odisla\Desktop\Inventario_Inteligente\backend\node_modules\express\lib\router\index.js:280:10)
+    at authenticate (file:///C:/Users/odisla/Desktop/Inventario_Inteligente/backend/middleware/auth.js:11:5) {
+  errorno: 'ETIMEDOUT',
+  code: 'ETIMEDOUT',
+  syscall: 'connect',
+  fatal: true
+}
+Error: connect ETIMEDOUT
+    at file:///C:/Users/odisla/Desktop/Inventario_Inteligente/backend/routes/departments.js:19:27
+    at file:///C:/Users/odisla/Desktop/Inventario_Inteligente/backend/routes/departments.js:7:64
+    at Layer.handle [as handle_request] (C:\Users\odisla\Desktop\Inventario_Inteligente\backend\node_modules\express\lib\router\layer.js:95:5)
+    at next (C:\Users\odisla\Desktop\Inventario_Inteligente\backend\node_modules\express\lib\router\route.js:149:13)
+    at Route.dispatch (C:\Users\odisla\Desktop\Inventario_Inteligente\backend\node_modules\express\lib\router\route.js:119:3)
+    at Layer.handle [as handle_request] (C:\Users\odisla\Desktop\Inventario_Inteligente\backend\node_modules\express\lib\router\layer.js:95:5)
+    at C:\Users\odisla\Desktop\Inventario_Inteligente\backend\node_modules\express\lib\router\index.js:284:15
+    at router.process_params (C:\Users\odisla\Desktop\Inventario_Inteligente\backend\node_modules\express\lib\router\index.js:346:12)
+    at next (C:\Users\odisla\Desktop\Inventario_Inteligente\backend\node_modules\express\lib\router\index.js:280:10)
+    at authenticate (file:///C:/Users/odisla/Desktop/Inventario_Inteligente/backend/middleware/auth.js:11:5) {
+  errorno: 'ETIMEDOUT',
+  code: 'ETIMEDOUT',
+  syscall: 'connect',
+  fatal: true
+}
+Error: connect ETIMEDOUT
+    at file:///C:/Users/odisla/Desktop/Inventario_Inteligente/backend/routes/categories.js:22:27
+    at file:///C:/Users/odisla/Desktop/Inventario_Inteligente/backend/routes/categories.js:7:64
+    at Layer.handle [as handle_request] (C:\Users\odisla\Desktop\Inventario_Inteligente\backend\node_modules\express\lib\router\layer.js:95:5)
+    at next (C:\Users\odisla\Desktop\Inventario_Inteligente\backend\node_modules\express\lib\router\route.js:149:13)
+    at Route.dispatch (C:\Users\odisla\Desktop\Inventario_Inteligente\backend\node_modules\express\lib\router\route.js:119:3)
+    at Layer.handle [as handle_request] (C:\Users\odisla\Desktop\Inventario_Inteligente\backend\node_modules\express\lib\router\layer.js:95:5)
+    at C:\Users\odisla\Desktop\Inventario_Inteligente\backend\node_modules\express\lib\router\index.js:284:15
+    at router.process_params (C:\Users\odisla\Desktop\Inventario_Inteligente\backend\node_modules\express\lib\router\index.js:346:12)
+    at next (C:\Users\odisla\Desktop\Inventario_Inteligente\backend\node_modules\express\lib\router\index.js:280:10)
+    at authenticate (file:///C:/Users/odisla/Desktop/Inventario_Inteligente/backend/middleware/auth.js:11:5) {
+  errorno: 'ETIMEDOUT',
+  code: 'ETIMEDOUT',
+  syscall: 'connect',
+  fatal: true
+}
+Error: connect ETIMEDOUT
+    at file:///C:/Users/odisla/Desktop/Inventario_Inteligente/backend/routes/sucursales.js:18:27
+    at file:///C:/Users/odisla/Desktop/Inventario_Inteligente/backend/routes/sucursales.js:7:64
+    at Layer.handle [as handle_request] (C:\Users\odisla\Desktop\Inventario_Inteligente\backend\node_modules\express\lib\router\layer.js:95:5)
+    at next (C:\Users\odisla\Desktop\Inventario_Inteligente\backend\node_modules\express\lib\router\route.js:149:13)
+    at Route.dispatch (C:\Users\odisla\Desktop\Inventario_Inteligente\backend\node_modules\express\lib\router\route.js:119:3)
+    at Layer.handle [as handle_request] (C:\Users\odisla\Desktop\Inventario_Inteligente\backend\node_modules\express\lib\router\layer.js:95:5)
+    at C:\Users\odisla\Desktop\Inventario_Inteligente\backend\node_modules\express\lib\router\index.js:284:15
+    at router.process_params (C:\Users\odisla\Desktop\Inventario_Inteligente\backend\node_modules\express\lib\router\index.js:346:12)
+    at next (C:\Users\odisla\Desktop\Inventario_Inteligente\backend\node_modules\express\lib\router\index.js:280:10)
+    at authenticate (file:///C:/Users/odisla/Desktop/Inventario_Inteligente/backend/middleware/auth.js:11:5) {
+  errorno: 'ETIMEDOUT',
+  code: 'ETIMEDOUT',
+  syscall: 'connect',
+  fatal: true
+}
+Error: connect ETIMEDOUT
+    at file:///C:/Users/odisla/Desktop/Inventario_Inteligente/backend/routes/estantes.js:26:27
+    at file:///C:/Users/odisla/Desktop/Inventario_Inteligente/backend/routes/estantes.js:7:64
+    at Layer.handle [as handle_request] (C:\Users\odisla\Desktop\Inventario_Inteligente\backend\node_modules\express\lib\router\layer.js:95:5)
+    at next (C:\Users\odisla\Desktop\Inventario_Inteligente\backend\node_modules\express\lib\router\route.js:149:13)
+    at Route.dispatch (C:\Users\odisla\Desktop\Inventario_Inteligente\backend\node_modules\express\lib\router\route.js:119:3)
+    at Layer.handle [as handle_request] (C:\Users\odisla\Desktop\Inventario_Inteligente\backend\node_modules\express\lib\router\layer.js:95:5)
+    at C:\Users\odisla\Desktop\Inventario_Inteligente\backend\node_modules\express\lib\router\index.js:284:15
+    at router.process_params (C:\Users\odisla\Desktop\Inventario_Inteligente\backend\node_modules\express\lib\router\index.js:346:12)
+    at next (C:\Users\odisla\Desktop\Inventario_Inteligente\backend\node_modules\express\lib\router\index.js:280:10)
+    at authenticate (file:///C:/Users/odisla/Desktop/Inventario_Inteligente/backend/middleware/auth.js:11:5) {
+  errorno: 'ETIMEDOUT',
+  code: 'ETIMEDOUT',
+  syscall: 'connect',
+  fatal: true
+}
+Error: connect ETIMEDOUT
+    at file:///C:/Users/odisla/Desktop/Inventario_Inteligente/backend/routes/logs.js:34:27
+    at file:///C:/Users/odisla/Desktop/Inventario_Inteligente/backend/routes/logs.js:7:64
+    at Layer.handle [as handle_request] (C:\Users\odisla\Desktop\Inventario_Inteligente\backend\node_modules\express\lib\router\layer.js:95:5)
+    at next (C:\Users\odisla\Desktop\Inventario_Inteligente\backend\node_modules\express\lib\router\route.js:149:13)
+    at Route.dispatch (C:\Users\odisla\Desktop\Inventario_Inteligente\backend\node_modules\express\lib\router\route.js:119:3)
+    at Layer.handle [as handle_request] (C:\Users\odisla\Desktop\Inventario_Inteligente\backend\node_modules\express\lib\router\layer.js:95:5)
+    at C:\Users\odisla\Desktop\Inventario_Inteligente\backend\node_modules\express\lib\router\index.js:284:15
+    at router.process_params (C:\Users\odisla\Desktop\Inventario_Inteligente\backend\node_modules\express\lib\router\index.js:346:12)
+    at next (C:\Users\odisla\Desktop\Inventario_Inteligente\backend\node_modules\express\lib\router\index.js:280:10)
+    at authenticate (file:///C:/Users/odisla/Desktop/Inventario_Inteligente/backend/middleware/auth.js:11:5) {
+  errorno: 'ETIMEDOUT',
+  code: 'ETIMEDOUT',
+  syscall: 'connect',
+  fatal: true
+}
+Error: connect ETIMEDOUT
+    at file:///C:/Users/odisla/Desktop/Inventario_Inteligente/backend/routes/categories.js:22:27
+    at file:///C:/Users/odisla/Desktop/Inventario_Inteligente/backend/routes/categories.js:7:64
+    at Layer.handle [as handle_request] (C:\Users\odisla\Desktop\Inventario_Inteligente\backend\node_modules\express\lib\router\layer.js:95:5)
+    at next (C:\Users\odisla\Desktop\Inventario_Inteligente\backend\node_modules\express\lib\router\route.js:149:13)
+    at Route.dispatch (C:\Users\odisla\Desktop\Inventario_Inteligente\backend\node_modules\express\lib\router\route.js:119:3)
+    at Layer.handle [as handle_request] (C:\Users\odisla\Desktop\Inventario_Inteligente\backend\node_modules\express\lib\router\layer.js:95:5)
+    at C:\Users\odisla\Desktop\Inventario_Inteligente\backend\node_modules\express\lib\router\index.js:284:15
+    at router.process_params (C:\Users\odisla\Desktop\Inventario_Inteligente\backend\node_modules\express\lib\router\index.js:346:12)
+    at next (C:\Users\odisla\Desktop\Inventario_Inteligente\backend\node_modules\express\lib\router\index.js:280:10)
+    at authenticate (file:///C:/Users/odisla/Desktop/Inventario_Inteligente/backend/middleware/auth.js:11:5) {
+  errorno: 'ETIMEDOUT',
+  code: 'ETIMEDOUT',
+  syscall: 'connect',
+  fatal: true
+}
+Error: connect ETIMEDOUT
+    at file:///C:/Users/odisla/Desktop/Inventario_Inteligente/backend/routes/sucursales.js:18:27
+    at file:///C:/Users/odisla/Desktop/Inventario_Inteligente/backend/routes/sucursales.js:7:64
+    at Layer.handle [as handle_request] (C:\Users\odisla\Desktop\Inventario_Inteligente\backend\node_modules\express\lib\router\layer.js:95:5)
+    at next (C:\Users\odisla\Desktop\Inventario_Inteligente\backend\node_modules\express\lib\router\route.js:149:13)
+    at Route.dispatch (C:\Users\odisla\Desktop\Inventario_Inteligente\backend\node_modules\express\lib\router\route.js:119:3)
+    at Layer.handle [as handle_request] (C:\Users\odisla\Desktop\Inventario_Inteligente\backend\node_modules\express\lib\router\layer.js:95:5)
+    at C:\Users\odisla\Desktop\Inventario_Inteligente\backend\node_modules\express\lib\router\index.js:284:15
+    at router.process_params (C:\Users\odisla\Desktop\Inventario_Inteligente\backend\node_modules\express\lib\router\index.js:346:12)
+    at next (C:\Users\odisla\Desktop\Inventario_Inteligente\backend\node_modules\express\lib\router\index.js:280:10)
+    at authenticate (file:///C:/Users/odisla/Desktop/Inventario_Inteligente/backend/middleware/auth.js:11:5) {
+  errorno: 'ETIMEDOUT',
+  code: 'ETIMEDOUT',
+  syscall: 'connect',
+  fatal: true
+}
+Error: connect ETIMEDOUT
+    at file:///C:/Users/odisla/Desktop/Inventario_Inteligente/backend/routes/estantes.js:26:27
+    at file:///C:/Users/odisla/Desktop/Inventario_Inteligente/backend/routes/estantes.js:7:64
+    at Layer.handle [as handle_request] (C:\Users\odisla\Desktop\Inventario_Inteligente\backend\node_modules\express\lib\router\layer.js:95:5)
+    at next (C:\Users\odisla\Desktop\Inventario_Inteligente\backend\node_modules\express\lib\router\route.js:149:13)
+    at Route.dispatch (C:\Users\odisla\Desktop\Inventario_Inteligente\backend\node_modules\express\lib\router\route.js:119:3)
+    at Layer.handle [as handle_request] (C:\Users\odisla\Desktop\Inventario_Inteligente\backend\node_modules\express\lib\router\layer.js:95:5)
+    at C:\Users\odisla\Desktop\Inventario_Inteligente\backend\node_modules\express\lib\router\index.js:284:15
+    at router.process_params (C:\Users\odisla\Desktop\Inventario_Inteligente\backend\node_modules\express\lib\router\index.js:346:12)
+    at next (C:\Users\odisla\Desktop\Inventario_Inteligente\backend\node_modules\express\lib\router\index.js:280:10)
+    at authenticate (file:///C:/Users/odisla/Desktop/Inventario_Inteligente/backend/middleware/auth.js:11:5) {
+  errorno: 'ETIMEDOUT',
+  code: 'ETIMEDOUT',
+  syscall: 'connect',
+  fatal: true
+}
+Error: connect ETIMEDOUT
+    at file:///C:/Users/odisla/Desktop/Inventario_Inteligente/backend/routes/logs.js:34:27
+    at file:///C:/Users/odisla/Desktop/Inventario_Inteligente/backend/routes/logs.js:7:64
+    at Layer.handle [as handle_request] (C:\Users\odisla\Desktop\Inventario_Inteligente\backend\node_modules\express\lib\router\layer.js:95:5)
+    at next (C:\Users\odisla\Desktop\Inventario_Inteligente\backend\node_modules\express\lib\router\route.js:149:13)
+    at Route.dispatch (C:\Users\odisla\Desktop\Inventario_Inteligente\backend\node_modules\express\lib\router\route.js:119:3)
+    at Layer.handle [as handle_request] (C:\Users\odisla\Desktop\Inventario_Inteligente\backend\node_modules\express\lib\router\layer.js:95:5)
+    at C:\Users\odisla\Desktop\Inventario_Inteligente\backend\node_modules\express\lib\router\index.js:284:15
+    at router.process_params (C:\Users\odisla\Desktop\Inventario_Inteligente\backend\node_modules\express\lib\router\index.js:346:12)
+    at next (C:\Users\odisla\Desktop\Inventario_Inteligente\backend\node_modules\express\lib\router\index.js:280:10)
+    at authenticate (file:///C:/Users/odisla/Desktop/Inventario_Inteligente/backend/middleware/auth.js:11:5) {
+  errorno: 'ETIMEDOUT',
+  code: 'ETIMEDOUT',
+  syscall: 'connect',
+  fatal: true
+}
+Error: connect ETIMEDOUT
+    at file:///C:/Users/odisla/Desktop/Inventario_Inteligente/backend/routes/categories.js:22:27
+    at file:///C:/Users/odisla/Desktop/Inventario_Inteligente/backend/routes/categories.js:7:64
+    at Layer.handle [as handle_request] (C:\Users\odisla\Desktop\Inventario_Inteligente\backend\node_modules\express\lib\router\layer.js:95:5)
+    at next (C:\Users\odisla\Desktop\Inventario_Inteligente\backend\node_modules\express\lib\router\route.js:149:13)
+    at Route.dispatch (C:\Users\odisla\Desktop\Inventario_Inteligente\backend\node_modules\express\lib\router\route.js:119:3)
+    at Layer.handle [as handle_request] (C:\Users\odisla\Desktop\Inventario_Inteligente\backend\node_modules\express\lib\router\layer.js:95:5)
+    at C:\Users\odisla\Desktop\Inventario_Inteligente\backend\node_modules\express\lib\router\index.js:284:15
+    at router.process_params (C:\Users\odisla\Desktop\Inventario_Inteligente\backend\node_modules\express\lib\router\index.js:346:12)
+    at next (C:\Users\odisla\Desktop\Inventario_Inteligente\backend\node_modules\express\lib\router\index.js:280:10)
+    at authenticate (file:///C:/Users/odisla/Desktop/Inventario_Inteligente/backend/middleware/auth.js:11:5) {
+  errorno: 'ETIMEDOUT',
+  code: 'ETIMEDOUT',
+  syscall: 'connect',
+  fatal: true
+}
+Error: connect ETIMEDOUT
+    at file:///C:/Users/odisla/Desktop/Inventario_Inteligente/backend/routes/estantes.js:26:27
+    at file:///C:/Users/odisla/Desktop/Inventario_Inteligente/backend/routes/estantes.js:7:64
+    at Layer.handle [as handle_request] (C:\Users\odisla\Desktop\Inventario_Inteligente\backend\node_modules\express\lib\router\layer.js:95:5)
+    at next (C:\Users\odisla\Desktop\Inventario_Inteligente\backend\node_modules\express\lib\router\route.js:149:13)
+    at Route.dispatch (C:\Users\odisla\Desktop\Inventario_Inteligente\backend\node_modules\express\lib\router\route.js:119:3)
+    at Layer.handle [as handle_request] (C:\Users\odisla\Desktop\Inventario_Inteligente\backend\node_modules\express\lib\router\layer.js:95:5)
+    at C:\Users\odisla\Desktop\Inventario_Inteligente\backend\node_modules\express\lib\router\index.js:284:15
+    at router.process_params (C:\Users\odisla\Desktop\Inventario_Inteligente\backend\node_modules\express\lib\router\index.js:346:12)
+    at next (C:\Users\odisla\Desktop\Inventario_Inteligente\backend\node_modules\express\lib\router\index.js:280:10)
+    at authenticate (file:///C:/Users/odisla/Desktop/Inventario_Inteligente/backend/middleware/auth.js:11:5) {
+  errorno: 'ETIMEDOUT',
+  code: 'ETIMEDOUT',
+  syscall: 'connect',
+  fatal: true
+}
+Error: connect ETIMEDOUT
+    at file:///C:/Users/odisla/Desktop/Inventario_Inteligente/backend/routes/categories.js:22:27
+    at file:///C:/Users/odisla/Desktop/Inventario_Inteligente/backend/routes/categories.js:7:64
+    at Layer.handle [as handle_request] (C:\Users\odisla\Desktop\Inventario_Inteligente\backend\node_modules\express\lib\router\layer.js:95:5)
+    at next (C:\Users\odisla\Desktop\Inventario_Inteligente\backend\node_modules\express\lib\router\route.js:149:13)
+    at Route.dispatch (C:\Users\odisla\Desktop\Inventario_Inteligente\backend\node_modules\express\lib\router\route.js:119:3)
+    at Layer.handle [as handle_request] (C:\Users\odisla\Desktop\Inventario_Inteligente\backend\node_modules\express\lib\router\layer.js:95:5)
+    at C:\Users\odisla\Desktop\Inventario_Inteligente\backend\node_modules\express\lib\router\index.js:284:15
+    at router.process_params (C:\Users\odisla\Desktop\Inventario_Inteligente\backend\node_modules\express\lib\router\index.js:346:12)
+    at next (C:\Users\odisla\Desktop\Inventario_Inteligente\backend\node_modules\express\lib\router\index.js:280:10)
+    at authenticate (file:///C:/Users/odisla/Desktop/Inventario_Inteligente/backend/middleware/auth.js:11:5) {
+  errorno: 'ETIMEDOUT',
+  code: 'ETIMEDOUT',
+  syscall: 'connect',
+  fatal: true
+}
+Error: connect ETIMEDOUT
+    at file:///C:/Users/odisla/Desktop/Inventario_Inteligente/backend/routes/estantes.js:26:27
+    at file:///C:/Users/odisla/Desktop/Inventario_Inteligente/backend/routes/estantes.js:7:64
+    at Layer.handle [as handle_request] (C:\Users\odisla\Desktop\Inventario_Inteligente\backend\node_modules\express\lib\router\layer.js:95:5)
+    at next (C:\Users\odisla\Desktop\Inventario_Inteligente\backend\node_modules\express\lib\router\route.js:149:13)
+    at Route.dispatch (C:\Users\odisla\Desktop\Inventario_Inteligente\backend\node_modules\express\lib\router\route.js:119:3)
+    at Layer.handle [as handle_request] (C:\Users\odisla\Desktop\Inventario_Inteligente\backend\node_modules\express\lib\router\layer.js:95:5)
+    at C:\Users\odisla\Desktop\Inventario_Inteligente\backend\node_modules\express\lib\router\index.js:284:15
+    at router.process_params (C:\Users\odisla\Desktop\Inventario_Inteligente\backend\node_modules\express\lib\router\index.js:346:12)
+    at next (C:\Users\odisla\Desktop\Inventario_Inteligente\backend\node_modules\express\lib\router\index.js:280:10)
+    at authenticate (file:///C:/Users/odisla/Desktop/Inventario_Inteligente/backend/middleware/auth.js:11:5) {
+  errorno: 'ETIMEDOUT',
+  code: 'ETIMEDOUT',
+  syscall: 'connect',
+  fatal: true
+}
+Error: connect ETIMEDOUT
+    at file:///C:/Users/odisla/Desktop/Inventario_Inteligente/backend/routes/logs.js:34:27
+    at file:///C:/Users/odisla/Desktop/Inventario_Inteligente/backend/routes/logs.js:7:64
+    at Layer.handle [as handle_request] (C:\Users\odisla\Desktop\Inventario_Inteligente\backend\node_modules\express\lib\router\layer.js:95:5)
+    at next (C:\Users\odisla\Desktop\Inventario_Inteligente\backend\node_modules\express\lib\router\route.js:149:13)
+    at Route.dispatch (C:\Users\odisla\Desktop\Inventario_Inteligente\backend\node_modules\express\lib\router\route.js:119:3)
+    at Layer.handle [as handle_request] (C:\Users\odisla\Desktop\Inventario_Inteligente\backend\node_modules\express\lib\router\layer.js:95:5)
+    at C:\Users\odisla\Desktop\Inventario_Inteligente\backend\node_modules\express\lib\router\index.js:284:15
+    at router.process_params (C:\Users\odisla\Desktop\Inventario_Inteligente\backend\node_modules\express\lib\router\index.js:346:12)
+    at next (C:\Users\odisla\Desktop\Inventario_Inteligente\backend\node_modules\express\lib\router\index.js:280:10)
+    at authenticate (file:///C:/Users/odisla/Desktop/Inventario_Inteligente/backend/middleware/auth.js:11:5) {
+  errorno: 'ETIMEDOUT',
+  code: 'ETIMEDOUT',
+  syscall: 'connect',
+  fatal: true
+}

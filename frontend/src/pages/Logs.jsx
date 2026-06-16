@@ -24,6 +24,7 @@ const ACTION_MAP = {
   restored:      { label: 'Restaurado',    color: 'bg-teal-500/10 text-teal-600' },
   damaged:       { label: 'Baja',          color: 'bg-red-500/10 text-red-600' },
   transfer:      { label: 'Traspaso',      color: 'bg-violet-500/10 text-violet-600' },
+  exit:          { label: 'Salida de Mercancía', color: 'bg-rose-500/10 text-rose-600' },
 };
 
 export default function Logs() {

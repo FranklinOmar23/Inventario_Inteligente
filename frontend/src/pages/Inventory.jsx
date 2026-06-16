@@ -30,7 +30,8 @@ const STATUS_LABELS = {
 export default function Inventory() {
   const queryClient = useQueryClient();
   const { toast }   = useToast();
-  const { user }    = useAuth();
+  const { user, tenant } = useAuth();
+  const isValued = tenant?.inventory_type === 'valued';
   const [searchParams] = useSearchParams();
 
   const [search,       setSearch]       = useState('');
@@ -66,7 +67,7 @@ export default function Inventory() {
       const matchShelf  = shelfFilter  === 'all' || item.shelf_id === shelfFilter || (shelfFilter === '__none__' && !item.shelf_id);
       return matchSearch && matchStatus && matchCat && matchDept && matchShelf;
     });
-  }, [items, search, statusFilter, catFilter, deptFilter]);
+  }, [items, search, statusFilter, catFilter, deptFilter, shelfFilter]);
 
   const totalPages = Math.ceil(filtered.length / pageSize);
   const paginated  = filtered.slice((page - 1) * pageSize, page * pageSize);
@@ -120,6 +121,7 @@ export default function Inventory() {
     inUse:       items.filter(i => i.status === 'checked_out').length,
     maintenance: items.filter(i => ['maintenance', 'revision', 'retired', 'damaged'].includes(i.status)).length,
     restored:    items.filter(i => i.restored_at).length,
+    totalValue:  items.reduce((sum, i) => sum + (i.unit_cost != null ? Number(i.unit_cost) * i.quantity : 0), 0),
   }), [items]);
 
   const BULK_STATUS_OPTIONS = [
@@ -167,7 +169,7 @@ export default function Inventory() {
           <div className="space-y-1">
             <Label className="text-xs text-muted-foreground">Estado</Label>
             <Select value={statusFilter} onValueChange={resetPage(setStatusFilter)}>
-              <SelectTrigger className="w-36 rounded-xl"><SelectValue placeholder="Todos" /></SelectTrigger>
+              <SelectTrigger className="w-48 rounded-xl"><SelectValue placeholder="Todos" /></SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">Todos los estados</SelectItem>
                 <SelectItem value="in_stock">En Stock</SelectItem>
@@ -182,17 +184,22 @@ export default function Inventory() {
           <div className="space-y-1">
             <Label className="text-xs text-muted-foreground">Categoría</Label>
             <Select value={catFilter} onValueChange={resetPage(setCatFilter)}>
-              <SelectTrigger className="w-40 rounded-xl"><SelectValue placeholder="Todas" /></SelectTrigger>
+              <SelectTrigger className="w-44 rounded-xl"><SelectValue placeholder="Todas" /></SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">Todas las categorías</SelectItem>
-                {categories.map((c) => <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>)}
+                {categories.filter(c => !c.parent_id).flatMap((c) => [
+                  <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>,
+                  ...categories.filter(s => s.parent_id === c.id).map(s => (
+                    <SelectItem key={s.id} value={s.id}>&nbsp;&nbsp;↳ {s.name}</SelectItem>
+                  )),
+                ])}
               </SelectContent>
             </Select>
           </div>
           <div className="space-y-1">
             <Label className="text-xs text-muted-foreground">Departamento</Label>
             <Select value={deptFilter} onValueChange={resetPage(setDeptFilter)}>
-              <SelectTrigger className="w-40 rounded-xl"><SelectValue placeholder="Todos" /></SelectTrigger>
+              <SelectTrigger className="w-52 rounded-xl"><SelectValue placeholder="Todos" /></SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">Todos los departamentos</SelectItem>
                 {departments.map((d) => <SelectItem key={d.id} value={d.id}>{d.name}</SelectItem>)}
@@ -203,7 +210,7 @@ export default function Inventory() {
             <div className="space-y-1">
               <Label className="text-xs text-muted-foreground">Estante</Label>
               <Select value={shelfFilter} onValueChange={resetPage(setShelfFilter)}>
-                <SelectTrigger className="w-40 rounded-xl"><SelectValue placeholder="Todos" /></SelectTrigger>
+                <SelectTrigger className="w-48 rounded-xl"><SelectValue placeholder="Todos" /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="all">Todos los estantes</SelectItem>
                   <SelectItem value="__none__">Sin estante</SelectItem>
@@ -226,7 +233,11 @@ export default function Inventory() {
               <table className="w-full text-sm">
                 <thead>
                   <tr className="border-b border-border bg-muted/30">
-                    {['Nombre', 'Categoría', 'Departamento', 'Estante', 'Estado', 'Qty', 'Identificadores', ''].map((h) => (
+                    {[
+                      'Nombre', 'Categoría', 'Departamento', 'Estante', 'Estado', 'Qty',
+                      ...(isValued ? ['Valor Total'] : []),
+                      'Identificadores', '',
+                    ].map((h) => (
                       <th key={h} className="text-left px-4 py-3 text-xs font-semibold text-muted-foreground uppercase tracking-wider">{h}</th>
                     ))}
                   </tr>
@@ -268,6 +279,13 @@ export default function Inventory() {
                           </div>
                         </td>
                         <td className="px-4 py-3 font-mono text-muted-foreground">{item.quantity}</td>
+                        {isValued && (
+                          <td className="px-4 py-3 font-mono text-sm font-semibold text-primary">
+                            {item.unit_cost != null
+                              ? `RD$${(Number(item.unit_cost) * item.quantity).toLocaleString('es-DO', { minimumFractionDigits: 2 })}`
+                              : <span className="text-muted-foreground font-normal">—</span>}
+                          </td>
+                        )}
                         <td className="px-4 py-3">
                           <div className="text-xs text-muted-foreground space-y-0.5">
                             {item.asset_tag     && <div>AF: {item.asset_tag}</div>}
@@ -332,6 +350,14 @@ export default function Inventory() {
               <span className={`text-sm font-bold ${cls}`}>{value}</span>
             </div>
           ))}
+          {isValued && (
+            <div className="flex items-center justify-between pt-2 border-t border-border">
+              <span className="text-xs text-muted-foreground">Valor total inventario</span>
+              <span className="text-sm font-bold text-primary">
+                RD${stats.totalValue.toLocaleString('es-DO', { minimumFractionDigits: 2 })}
+              </span>
+            </div>
+          )}
         </div>
 
         <div className="glass-card rounded-2xl p-5 space-y-3">

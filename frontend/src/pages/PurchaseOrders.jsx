@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   ShoppingCart, AlertTriangle, Mail, Loader2, Send,
-  CheckCheck, Package, Minus, Plus, Cpu,
+  CheckCheck, Package, Minus, Plus, Cpu, Settings, Eye, EyeOff, Info,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -10,10 +10,17 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Switch } from '@/components/ui/switch';
 import { useToast } from '@/components/ui/use-toast';
 import { useAuth } from '@/context/AuthContext';
 import api from '@/api/client';
 import PageHeader from '@/components/shared/PageHeader';
+
+const EMPTY_EMAIL_CFG = {
+  manager_email: '', manager_name: '',
+  smtp_host: '', smtp_port: 587, smtp_secure: false,
+  smtp_user: '', smtp_pass: '', smtp_from_name: '',
+};
 
 const STATUS_OPTIONS = ['pending', 'approved', 'ordered', 'received', 'cancelled'];
 const STATUS_LABELS  = { pending: 'Pendiente', approved: 'Aprobado', ordered: 'Ordenado', received: 'Recibido', cancelled: 'Cancelado' };
@@ -69,7 +76,58 @@ export default function PurchaseOrders() {
   const { data: items      = [] } = useQuery({ queryKey: ['inventory'],       queryFn: () => api.get('/inventory?limit=500').then(r => r.data) });
   const { data: categories = [] } = useQuery({ queryKey: ['categories'],      queryFn: () => api.get('/categories').then(r => r.data) });
   const { data: orders     = [] } = useQuery({ queryKey: ['purchase-orders'], queryFn: () => api.get('/purchase-orders').then(r => r.data) });
-  const { data: manager    = {} } = useQuery({ queryKey: ['manager-config'],  queryFn: () => api.get('/purchase-orders/manager-config').then(r => r.data), staleTime: Infinity });
+  const { data: manager    = {} } = useQuery({ queryKey: ['manager-config'],  queryFn: () => api.get('/purchase-orders/manager-config').then(r => r.data) });
+
+  // Email configuration (admin only)
+  const isAdmin = user?.role === 'admin';
+  const [emailCfgOpen, setEmailCfgOpen] = useState(false);
+  const [emailCfg,     setEmailCfg]     = useState(EMPTY_EMAIL_CFG);
+  const [showSmtpPass, setShowSmtpPass] = useState(false);
+  const [savingCfg,    setSavingCfg]    = useState(false);
+
+  const openEmailCfg = async () => {
+    try {
+      const { data } = await api.get('/tenants/email-config');
+      setEmailCfg({
+        manager_email:  data.manager_email,
+        manager_name:   data.manager_name,
+        smtp_host:      data.smtp_host,
+        smtp_port:      data.smtp_port,
+        smtp_secure:    data.smtp_secure,
+        smtp_user:      data.smtp_user,
+        smtp_pass:      '',
+        smtp_from_name: data.smtp_from_name,
+        has_smtp_pass:  data.has_smtp_pass,
+      });
+      setShowSmtpPass(false);
+      setEmailCfgOpen(true);
+    } catch (err) {
+      toast({ title: 'Error', description: err.response?.data?.error || 'No se pudo cargar la configuración', variant: 'destructive' });
+    }
+  };
+
+  const handleSaveEmailCfg = async () => {
+    if (!emailCfg.manager_email.trim()) {
+      toast({ title: 'Correo del encargado requerido', variant: 'destructive' }); return;
+    }
+    if (!emailCfg.smtp_user.trim()) {
+      toast({ title: 'Correo remitente (SMTP) requerido', variant: 'destructive' }); return;
+    }
+    if (!emailCfg.has_smtp_pass && !emailCfg.smtp_pass) {
+      toast({ title: 'Contraseña SMTP requerida', variant: 'destructive' }); return;
+    }
+    setSavingCfg(true);
+    try {
+      await api.put('/tenants/email-config', emailCfg);
+      queryClient.invalidateQueries({ queryKey: ['manager-config'] });
+      toast({ title: 'Configuración de correo guardada' });
+      setEmailCfgOpen(false);
+    } catch (err) {
+      toast({ title: 'Error', description: err.response?.data?.error || 'No se pudo guardar', variant: 'destructive' });
+    } finally {
+      setSavingCfg(false);
+    }
+  };
 
   // Low-stock: only categories with actual items in inventory
   const lowStockCats = categories.map(cat => {
@@ -198,7 +256,32 @@ export default function PurchaseOrders() {
 
   return (
     <div className="pb-28">
-      <PageHeader title="Órdenes de Compra" subtitle="Productos que necesitan reposición" icon={ShoppingCart} />
+      <PageHeader
+        title="Órdenes de Compra"
+        subtitle="Productos que necesitan reposición"
+        icon={ShoppingCart}
+        actions={isAdmin && (
+          <Button variant="outline" className="rounded-xl gap-2" onClick={openEmailCfg}>
+            <Settings className="w-4 h-4" /> Configurar Correo
+          </Button>
+        )}
+      />
+
+      {!manager.configured && (
+        <div className="mb-6 p-4 rounded-2xl border border-amber-500/30 bg-amber-500/5 flex items-center gap-3">
+          <Info className="w-4 h-4 text-amber-600 shrink-0" />
+          <p className="text-xs text-amber-700 dark:text-amber-400 flex-1">
+            {isAdmin
+              ? 'Aún no has configurado el correo para enviar requisiciones. Configúralo para poder enviar órdenes de compra.'
+              : 'El administrador todavía no ha configurado el envío de correos para órdenes de compra.'}
+          </p>
+          {isAdmin && (
+            <Button size="sm" variant="outline" className="rounded-xl text-xs h-8 shrink-0 border-amber-500/40" onClick={openEmailCfg}>
+              Configurar ahora
+            </Button>
+          )}
+        </div>
+      )}
 
       {/* ── Low-stock grid ─────────────────────────────────────── */}
       {lowStockCats.length > 0 ? (
@@ -495,6 +578,92 @@ export default function PurchaseOrders() {
             <Button onClick={handleMultiSend} disabled={sendingMulti} className="w-full rounded-xl gap-2">
               {sendingMulti ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
               {sendingMulti ? 'Enviando...' : `Enviar a ${manager.email || 'encargado'}`}
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* ── Email configuration dialog (admin only) ──────────────── */}
+      <Dialog open={emailCfgOpen} onOpenChange={setEmailCfgOpen}>
+        <DialogContent className="rounded-2xl max-w-lg max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Settings className="w-4 h-4 text-primary" /> Configurar Correo de Órdenes de Compra
+            </DialogTitle>
+            <p className="text-xs text-muted-foreground mt-1">
+              Configura a quién se envían las requisiciones y desde qué cuenta de correo se envían. Esta configuración es exclusiva de tu empresa.
+            </p>
+          </DialogHeader>
+
+          <div className="space-y-4 mt-1">
+            <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Destinatario</p>
+            <div className="grid sm:grid-cols-2 gap-4">
+              <div className="space-y-1.5">
+                <Label className="text-xs">Correo del encargado *</Label>
+                <Input type="email" value={emailCfg.manager_email}
+                  onChange={e => setEmailCfg(p => ({ ...p, manager_email: e.target.value }))}
+                  placeholder="encargado@empresa.com" className="rounded-xl" />
+              </div>
+              <div className="space-y-1.5">
+                <Label className="text-xs">Nombre del encargado</Label>
+                <Input value={emailCfg.manager_name}
+                  onChange={e => setEmailCfg(p => ({ ...p, manager_name: e.target.value }))}
+                  placeholder="Ing. Florentino" className="rounded-xl" />
+              </div>
+            </div>
+
+            <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground pt-2">Remitente (SMTP)</p>
+            <div className="grid sm:grid-cols-2 gap-4">
+              <div className="space-y-1.5">
+                <Label className="text-xs">Servidor SMTP</Label>
+                <Input value={emailCfg.smtp_host}
+                  onChange={e => setEmailCfg(p => ({ ...p, smtp_host: e.target.value }))}
+                  placeholder="smtp.gmail.com" className="rounded-xl" />
+              </div>
+              <div className="space-y-1.5">
+                <Label className="text-xs">Puerto</Label>
+                <Input type="number" value={emailCfg.smtp_port}
+                  onChange={e => setEmailCfg(p => ({ ...p, smtp_port: Number(e.target.value) || 587 }))}
+                  placeholder="587" className="rounded-xl" />
+              </div>
+            </div>
+
+            <div className="flex items-center justify-between px-1">
+              <Label className="text-xs">Usar SSL/TLS</Label>
+              <Switch checked={emailCfg.smtp_secure}
+                onCheckedChange={v => setEmailCfg(p => ({ ...p, smtp_secure: v }))} />
+            </div>
+
+            <div className="space-y-1.5">
+              <Label className="text-xs">Correo remitente *</Label>
+              <Input type="email" value={emailCfg.smtp_user}
+                onChange={e => setEmailCfg(p => ({ ...p, smtp_user: e.target.value }))}
+                placeholder="notificaciones@empresa.com" className="rounded-xl" />
+            </div>
+
+            <div className="space-y-1.5">
+              <Label className="text-xs">{emailCfg.has_smtp_pass ? 'Contraseña (dejar vacío para no cambiar)' : 'Contraseña / App Password *'}</Label>
+              <div className="relative">
+                <Input type={showSmtpPass ? 'text' : 'password'} value={emailCfg.smtp_pass}
+                  onChange={e => setEmailCfg(p => ({ ...p, smtp_pass: e.target.value }))}
+                  placeholder={emailCfg.has_smtp_pass ? '••••••••' : 'Contraseña o App Password'} className="rounded-xl pr-10" />
+                <button type="button" className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground" onClick={() => setShowSmtpPass(v => !v)}>
+                  {showSmtpPass ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                </button>
+              </div>
+              <p className="text-[11px] text-muted-foreground">Para Gmail, usa una "Contraseña de aplicación", no tu contraseña normal.</p>
+            </div>
+
+            <div className="space-y-1.5">
+              <Label className="text-xs">Nombre del remitente</Label>
+              <Input value={emailCfg.smtp_from_name}
+                onChange={e => setEmailCfg(p => ({ ...p, smtp_from_name: e.target.value }))}
+                placeholder="InvenAI" className="rounded-xl" />
+            </div>
+
+            <Button onClick={handleSaveEmailCfg} disabled={savingCfg} className="w-full rounded-xl gap-2">
+              {savingCfg ? <Loader2 className="w-4 h-4 animate-spin" /> : <Settings className="w-4 h-4" />}
+              {savingCfg ? 'Guardando...' : 'Guardar configuración'}
             </Button>
           </div>
         </DialogContent>

@@ -10,6 +10,7 @@ import Dashboard from '@/pages/Dashboard';
 import Inventory from '@/pages/Inventory';
 import Entry from '@/pages/Entry';
 import Checkout from '@/pages/Checkout';
+import Salida from '@/pages/Salida';
 import PurchaseOrders from '@/pages/PurchaseOrders';
 import Logs from '@/pages/Logs';
 import Departments from '@/pages/Departments';
@@ -21,6 +22,7 @@ import DamagedItems from '@/pages/DamagedItems';
 import Users from '@/pages/Users';
 import Estantes from '@/pages/Estantes';
 import Reports from '@/pages/Reports';
+import Profile from '@/pages/Profile';
 import Login from '@/pages/Login';
 import Register from '@/pages/Register';
 import ForgotPassword from '@/pages/ForgotPassword';
@@ -47,6 +49,7 @@ export default function App() {
               <Route path="/inventory/:id" element={<InventoryDetail />} />
               <Route path="/entry" element={<Entry />} />
               <Route path="/checkout" element={<Checkout />} />
+              <Route path="/salida" element={<Salida />} />
               <Route path="/purchase-orders" element={<PurchaseOrders />} />
               <Route path="/logs" element={<Logs />} />
               <Route path="/sucursales" element={<Sucursales />} />
@@ -57,6 +60,7 @@ export default function App() {
               <Route path="/users" element={<Users />} />
               <Route path="/estantes" element={<Estantes />} />
               <Route path="/reports" element={<Reports />} />
+              <Route path="/profile" element={<Profile />} />
             </Route>
             <Route path="*" element={<Navigate to="/" replace />} />
           </Routes>

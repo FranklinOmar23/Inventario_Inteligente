@@ -5,8 +5,47 @@ import { authenticate } from '../middleware/auth.js';
 const router = Router();
 router.use(authenticate);
 const asyncHandler = fn => (req, res, next) => Promise.resolve(fn(req, res, next)).catch(next);
+const tid = req => req.user.tenant_id;
 
 const toItem = r => ({ ...r, has_unique_id: !!r.has_unique_id });
+
+async function createInventoryItem(db, tenantId, data) {
+  const {
+    name, description, category_id, category_name,
+    department_id, department_name, sucursal_id, sucursal_name,
+    shelf_id, shelf_name,
+    quantity = 1, unit_cost, asset_tag, service_tag, serial_number, model, brand,
+    photo_url, notes, entry_date, has_unique_id = false,
+    expiration_date, batch_number, unit_measure,
+  } = data;
+  if (!name) throw Object.assign(new Error('Nombre requerido'), { status: 400 });
+
+  const id = crypto.randomUUID();
+  const today = new Date().toISOString().split('T')[0];
+
+  await db.execute(`
+    INSERT INTO inventory_items
+      (id, name, description, category_id, category_name, department_id, department_name,
+       sucursal_id, sucursal_name, shelf_id, shelf_name, status, quantity, unit_cost,
+       asset_tag, service_tag, serial_number, model, brand, photo_url, notes, entry_date,
+       has_unique_id, expiration_date, batch_number, unit_measure, tenant_id)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'in_stock', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+  `, [
+    id, name, description || '', category_id || null, category_name || '',
+    department_id || null, department_name || '',
+    sucursal_id || null, sucursal_name || '',
+    shelf_id || null, shelf_name || '',
+    Number(quantity) || 1, unit_cost != null ? Number(unit_cost) : null,
+    asset_tag || '', service_tag || '', serial_number || '',
+    model || '', brand || '', photo_url || null,
+    notes || null, entry_date || today,
+    has_unique_id ? 1 : 0,
+    expiration_date || null, batch_number || null, unit_measure || null,
+    tenantId,
+  ]);
+
+  return id;
+}
 
 /**
  * @swagger
@@ -50,13 +89,13 @@ const toItem = r => ({ ...r, has_unique_id: !!r.has_unique_id });
 router.get('/', asyncHandler(async (req, res) => {
   const db = getDB();
   const { status, category_id, department_id, shelf_id, search, limit = 200 } = req.query;
-  // Non-admin users with an assigned sucursal only see their branch
   const forcedSucursal = req.user.role !== 'admin' ? req.user.sucursal_id : null;
   const sucursal_id = forcedSucursal || req.query.sucursal_id || null;
 
   let sql = 'SELECT * FROM inventory_items WHERE deleted_at IS NULL';
   const params = [];
 
+  if (tid(req))      { sql += ' AND tenant_id = ?';     params.push(tid(req)); }
   if (status)        { sql += ' AND status = ?';        params.push(status); }
   if (category_id)   { sql += ' AND category_id = ?';   params.push(category_id); }
   if (department_id) { sql += ' AND department_id = ?'; params.push(department_id); }
@@ -117,9 +156,10 @@ router.get('/damaged', asyncHandler(async (req, res) => {
         LIMIT 1
       )
     WHERE (i.deleted_at IS NOT NULL OR i.status NOT IN ('in_stock'))
+    ${tid(req) ? 'AND i.tenant_id = ?' : ''}
     ORDER BY COALESCE(i.deleted_at, i.updated_at) DESC
     LIMIT ?
-  `, [Number(limit)]);
+  `, tid(req) ? [tid(req), Number(limit)] : [Number(limit)]);
 
   res.json(rows.map(toItem));
 }));
@@ -133,7 +173,10 @@ router.post('/bulk-status', asyncHandler(async (req, res) => {
 
   let targets;
   if (moveAll) {
-    const [rows] = await db.execute("SELECT id, name, quantity, department_name FROM inventory_items WHERE deleted_at IS NULL AND status NOT IN ('maintenance','revision','retired','damaged')");
+    let bulkSql = "SELECT id, name, quantity, department_name FROM inventory_items WHERE deleted_at IS NULL AND status NOT IN ('maintenance','revision','retired','damaged')";
+    const bulkParams = [];
+    if (tid(req)) { bulkSql += ' AND tenant_id = ?'; bulkParams.push(tid(req)); }
+    const [rows] = await db.execute(bulkSql, bulkParams);
     targets = rows;
   } else {
     if (!item_ids.length) return res.status(400).json({ error: 'Se requieren item_ids o all:true' });
@@ -217,39 +260,41 @@ router.get('/:id', asyncHandler(async (req, res) => {
  *             schema: { $ref: '#/components/schemas/InventoryItem' }
  */
 router.post('/', asyncHandler(async (req, res) => {
-  const {
-    name, description, category_id, category_name,
-    department_id, department_name, sucursal_id, sucursal_name,
-    shelf_id, shelf_name,
-    quantity = 1, asset_tag, service_tag, serial_number, model, brand,
-    photo_url, notes, entry_date, has_unique_id = false,
-  } = req.body;
-  if (!name) return res.status(400).json({ error: 'Nombre requerido' });
-
   const db = getDB();
-  const id = crypto.randomUUID();
-  const today = new Date().toISOString().split('T')[0];
-
-  await db.execute(`
-    INSERT INTO inventory_items
-      (id, name, description, category_id, category_name, department_id, department_name,
-       sucursal_id, sucursal_name, shelf_id, shelf_name, status, quantity, asset_tag, service_tag, serial_number,
-       model, brand, photo_url, notes, entry_date, has_unique_id)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'in_stock', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-  `, [
-    id, name, description || '', category_id || null, category_name || '',
-    department_id || null, department_name || '',
-    sucursal_id || null, sucursal_name || '',
-    shelf_id || null, shelf_name || '',
-    Number(quantity) || 1,
-    asset_tag || '', service_tag || '', serial_number || '',
-    model || '', brand || '', photo_url || null,
-    notes || null, entry_date || today,
-    has_unique_id ? 1 : 0,
-  ]);
-
+  const id = await createInventoryItem(db, tid(req), req.body);
   const [rows] = await db.execute('SELECT * FROM inventory_items WHERE id = ?', [id]);
   res.status(201).json(toItem(rows[0]));
+}));
+
+/**
+ * @swagger
+ * /api/inventory/bulk:
+ *   post:
+ *     summary: Registrar varios ítems de una sola vez (ej. productos extraídos de una factura)
+ *     tags: [Inventory]
+ *     responses:
+ *       201:
+ *         description: Ítems registrados
+ */
+router.post('/bulk', asyncHandler(async (req, res) => {
+  const { items } = req.body;
+  if (!Array.isArray(items) || items.length === 0) {
+    return res.status(400).json({ error: 'Se requiere un arreglo de items' });
+  }
+
+  const db = getDB();
+  const ids = [];
+  for (const item of items) {
+    if (!item.name) return res.status(400).json({ error: `Falta el nombre en uno de los productos` });
+    ids.push(await createInventoryItem(db, tid(req), item));
+  }
+
+  const [rows] = await db.execute(
+    `SELECT * FROM inventory_items WHERE id IN (${ids.map(() => '?').join(',')})`,
+    ids
+  );
+  const byId = new Map(rows.map(r => [r.id, toItem(r)]));
+  res.status(201).json(ids.map(id => byId.get(id)));
 }));
 
 /**
@@ -291,20 +336,23 @@ router.put('/:id', asyncHandler(async (req, res) => {
   await db.execute(`
     UPDATE inventory_items SET
       name=?, description=?, category_id=?, category_name=?, department_id=?,
-      department_name=?, shelf_id=?, shelf_name=?, status=?, quantity=?, asset_tag=?, service_tag=?,
-      serial_number=?, model=?, brand=?, photo_url=?, notes=?, entry_date=?,
-      checkout_date=?, checked_out_to=?, has_unique_id=?
+      department_name=?, shelf_id=?, shelf_name=?, status=?, quantity=?, unit_cost=?,
+      asset_tag=?, service_tag=?, serial_number=?, model=?, brand=?,
+      photo_url=?, notes=?, entry_date=?, checkout_date=?, checked_out_to=?, has_unique_id=?,
+      expiration_date=?, batch_number=?, unit_measure=?
     WHERE id=?
   `, [
     u.name, u.description || '', u.category_id || null, u.category_name || '',
     u.department_id || null, u.department_name || '',
     u.shelf_id || null, u.shelf_name || '',
     u.status, Number(u.quantity) || 0,
+    u.unit_cost != null ? Number(u.unit_cost) : null,
     u.asset_tag || '', u.service_tag || '', u.serial_number || '',
     u.model || '', u.brand || '', u.photo_url || null,
     u.notes || null, u.entry_date || null,
     u.checkout_date || null, u.checked_out_to || null,
     u.has_unique_id ? 1 : 0,
+    u.expiration_date || null, u.batch_number || null, u.unit_measure || null,
     req.params.id,
   ]);
 
@@ -510,6 +558,58 @@ router.patch('/:id/status', asyncHandler(async (req, res) => {
 
   const [rows] = await db.execute('SELECT * FROM inventory_items WHERE id=? AND deleted_at IS NULL', [req.params.id]);
   res.json(rows.length > 0 ? toItem(rows[0]) : { success: true });
+}));
+
+// ── Salida: permanent stock outflow (sale, consumption, disposal, etc.) ───────
+router.post('/:id/exit', asyncHandler(async (req, res) => {
+  const { quantity = 1, reason, destination, performed_by, performed_by_id, notes } = req.body;
+  if (!reason) return res.status(400).json({ error: 'Motivo de salida requerido' });
+
+  const db = getDB();
+
+  if (tid(req)) {
+    const [[tenantRow]] = await db.execute('SELECT inventory_type FROM tenants WHERE id = ?', [tid(req)]);
+    if (tenantRow?.inventory_type === 'physical') {
+      return res.status(400).json({ error: 'La Salida no está disponible para Inventario Físico. Usa Traspaso.' });
+    }
+  }
+
+  const [existing] = await db.execute(
+    'SELECT * FROM inventory_items WHERE id=? AND deleted_at IS NULL',
+    [req.params.id]
+  );
+  if (existing.length === 0) return res.status(404).json({ error: 'Item no encontrado' });
+
+  const item = existing[0];
+  const exitQty = Number(quantity) || 1;
+  if (exitQty > item.quantity) {
+    return res.status(400).json({ error: `Solo hay ${item.quantity} unidad(es) disponibles` });
+  }
+
+  const unitCost   = item.unit_cost != null ? Number(item.unit_cost) : null;
+  const totalValue = unitCost != null ? unitCost * exitQty : null;
+
+  if (exitQty >= item.quantity) {
+    await db.execute('UPDATE inventory_items SET deleted_at=NOW(), status="retired" WHERE id=?', [req.params.id]);
+  } else {
+    await db.execute('UPDATE inventory_items SET quantity=quantity-? WHERE id=?', [exitQty, req.params.id]);
+  }
+
+  const logId = crypto.randomUUID();
+  const timestamp = new Date();
+  await db.execute(`
+    INSERT INTO activity_logs
+      (id, action, item_id, item_name, category_name, department_name, quantity, unit_cost, total_value, performed_by, performed_by_id, reason, destination, details, timestamp, tenant_id)
+    VALUES (?, 'exit', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+  `, [
+    logId, item.id, item.name, item.category_name||'', item.department_name||'', exitQty,
+    unitCost, totalValue, performed_by||'', performed_by_id||null,
+    reason, destination || null,
+    notes || `Salida: ${exitQty} ud(s) · Motivo: ${reason}${destination ? ' · Destino: '+destination : ''}`,
+    timestamp, tid(req),
+  ]);
+
+  res.json({ success: true, exited: exitQty, unit_cost: unitCost, total_value: totalValue, log_id: logId, timestamp });
 }));
 
 // PATCH /:id/notes — actualizar observaciones/notas del item

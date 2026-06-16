@@ -20,6 +20,8 @@ import uploadRoutes from './routes/upload.js';
 import usersRoutes from './routes/users.js';
 import estantesRoutes from './routes/estantes.js';
 import reportsRoutes from './routes/reports.js';
+import tenantsRoutes from './routes/tenants.js';
+import billingRoutes from './routes/billing.js';
 import { errorHandler } from './middleware/errorHandler.js';
 
 dotenv.config();
@@ -32,6 +34,10 @@ app.use(cors({
   origin: process.env.FRONTEND_URL || 'http://localhost:5173',
   credentials: true,
 }));
+
+// Stripe webhook needs the raw request body for signature verification —
+// must be registered before express.json() parses the body.
+app.use('/api/billing/webhook', express.raw({ type: 'application/json' }));
 
 app.use(express.json({ limit: '15mb' }));
 app.use(express.urlencoded({ extended: true, limit: '15mb' }));
@@ -58,6 +64,8 @@ app.use('/api/upload',         uploadRoutes);
 app.use('/api/users',          usersRoutes);
 app.use('/api/estantes',       estantesRoutes);
 app.use('/api/reports',        reportsRoutes);
+app.use('/api/tenants',        tenantsRoutes);
+app.use('/api/billing',        billingRoutes);
 
 app.get('/api/health', (req, res) => res.json({ status: 'ok', time: new Date().toISOString() }));
 

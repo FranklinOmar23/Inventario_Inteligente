@@ -5,8 +5,8 @@ import { authenticate } from '../middleware/auth.js';
 const router = Router();
 router.use(authenticate);
 const asyncHandler = fn => (req, res, next) => Promise.resolve(fn(req, res, next)).catch(next);
+const tid = req => req.user.tenant_id;
 
-// GET /api/estantes — list shelves (filtered by user's sucursal if restricted)
 router.get('/', asyncHandler(async (req, res) => {
   const db = getDB();
   const forcedSucursal = req.user.role !== 'admin' ? req.user.sucursal_id : null;
@@ -19,6 +19,7 @@ router.get('/', asyncHandler(async (req, res) => {
     WHERE e.deleted_at IS NULL
   `;
   const params = [];
+  if (tid(req)) { sql += ' AND e.tenant_id = ?'; params.push(tid(req)); }
   if (sucursal_id) { sql += ' AND e.sucursal_id = ?'; params.push(sucursal_id); }
   sql += ' ORDER BY e.sucursal_name, e.name';
 
@@ -26,7 +27,6 @@ router.get('/', asyncHandler(async (req, res) => {
   res.json(rows);
 }));
 
-// POST /api/estantes — create shelf
 router.post('/', asyncHandler(async (req, res) => {
   const { name, description, sucursal_id, type = 'estante' } = req.body;
   if (!name) return res.status(400).json({ error: 'El nombre del estante es requerido' });
@@ -40,14 +40,13 @@ router.post('/', asyncHandler(async (req, res) => {
 
   const id = crypto.randomUUID();
   await db.execute(
-    'INSERT INTO estantes (id, name, description, sucursal_id, sucursal_name, type) VALUES (?, ?, ?, ?, ?, ?)',
-    [id, name, description || null, sucursal_id || null, sucursal_name, type]
+    'INSERT INTO estantes (id, name, description, sucursal_id, sucursal_name, type, tenant_id) VALUES (?, ?, ?, ?, ?, ?, ?)',
+    [id, name, description || null, sucursal_id || null, sucursal_name, type, tid(req)]
   );
 
   res.status(201).json({ id, name, description, sucursal_id, sucursal_name, type, item_count: 0 });
 }));
 
-// PUT /api/estantes/:id — update shelf
 router.put('/:id', asyncHandler(async (req, res) => {
   const { name, description, sucursal_id, type = 'estante' } = req.body;
   const db = getDB();
@@ -65,10 +64,8 @@ router.put('/:id', asyncHandler(async (req, res) => {
   res.json({ ok: true });
 }));
 
-// DELETE /api/estantes/:id — soft delete (unassigns items from this shelf first)
 router.delete('/:id', asyncHandler(async (req, res) => {
   const db = getDB();
-  // Unlink items from this shelf before deleting
   await db.execute(
     'UPDATE inventory_items SET shelf_id = NULL, shelf_name = "" WHERE shelf_id = ?',
     [req.params.id]

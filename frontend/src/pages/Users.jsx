@@ -18,6 +18,7 @@ const ALL_PERMS = [
   { key: 'inventory',       label: 'Ver Inventario' },
   { key: 'entry',           label: 'Registrar Entradas' },
   { key: 'checkout',        label: 'Traspasos' },
+  { key: 'salida',          label: 'Salida de Mercancía' },
   { key: 'purchase_orders', label: 'Órdenes de Compra' },
   { key: 'logs',            label: 'Ver Historial' },
   { key: 'categories',      label: 'Gestionar Categorías' },
@@ -38,9 +39,11 @@ function initials(name = '') {
 }
 
 export default function Users() {
-  const { user: me } = useAuth();
+  const { user: me, tenant } = useAuth();
   const queryClient = useQueryClient();
   const { toast } = useToast();
+
+  const visiblePerms = ALL_PERMS.filter(p => !(p.key === 'salida' && tenant?.inventory_type === 'physical'));
 
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState(null); // null = create, user obj = edit
@@ -277,7 +280,7 @@ export default function Users() {
               <div className="space-y-2">
                 <Label className="text-xs">Permisos</Label>
                 <div className="rounded-xl border border-border divide-y divide-border">
-                  {ALL_PERMS.map(({ key, label }) => (
+                  {visiblePerms.map(({ key, label }) => (
                     <div key={key} className="flex items-center justify-between px-3 py-2.5">
                       <span className="text-sm">{label}</span>
                       <Switch
