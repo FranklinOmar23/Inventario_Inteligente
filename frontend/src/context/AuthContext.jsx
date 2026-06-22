@@ -18,7 +18,10 @@ export function AuthProvider({ children }) {
             api.get('/tenants/me').then(t => setTenant(t.data)).catch(() => {});
           }
         })
-        .catch(() => localStorage.removeItem('token'))
+        .catch((err) => {
+          // 401 = token inválido/expirado → limpiar; error de red = backend temporalmente abajo → conservar token
+          if (err.response?.status === 401) localStorage.removeItem('token');
+        })
         .finally(() => setLoading(false));
     } else {
       setLoading(false);

@@ -1,7 +1,7 @@
 import React, { useState, useMemo } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
-import { Tags, Plus, Trash2, Loader2, ArrowRight, CornerDownRight, FolderPlus } from 'lucide-react';
+import { Tags, Plus, Trash2, Loader2, ArrowRight, CornerDownRight, FolderPlus, Pencil } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -19,19 +19,38 @@ export default function Categories() {
   const queryClient = useQueryClient();
   const navigate = useNavigate();
   const { toast } = useToast();
-  const [open, setOpen] = useState(false);
+  const [open, setOpen]     = useState(false);
   const [saving, setSaving] = useState(false);
-  const [form, setForm] = useState(EMPTY);
+  const [form, setForm]     = useState(EMPTY);
+
+  // Edit state
+  const [editOpen, setEditOpen]     = useState(false);
+  const [editId, setEditId]         = useState(null);
+  const [editForm, setEditForm]     = useState(EMPTY);
+  const [editSaving, setEditSaving] = useState(false);
 
   const { data: categories = [] } = useQuery({ queryKey: ['categories'], queryFn: () => api.get('/categories').then((r) => r.data) });
-  const { data: items = [] } = useQuery({ queryKey: ['inventory'], queryFn: () => api.get('/inventory?limit=200').then((r) => r.data) });
+  const { data: items = [] }      = useQuery({ queryKey: ['inventory'],  queryFn: () => api.get('/inventory?limit=200').then((r) => r.data) });
 
-  const topLevel = useMemo(() => categories.filter((c) => !c.parent_id), [categories]);
-  const childrenOf = (id) => categories.filter((c) => c.parent_id === id);
+  const topLevel    = useMemo(() => categories.filter((c) => !c.parent_id), [categories]);
+  const childrenOf  = (id) => categories.filter((c) => c.parent_id === id);
 
   const openCreate = (parentId = null) => {
     setForm({ ...EMPTY, parent_id: parentId });
     setOpen(true);
+  };
+
+  const openEdit = (cat, e) => {
+    e?.stopPropagation();
+    setEditId(cat.id);
+    setEditForm({
+      name:               cat.name               || '',
+      requires_asset_tag: !!cat.requires_asset_tag,
+      requires_unique_id: !!cat.requires_unique_id,
+      minimum_stock:      cat.minimum_stock       ?? 5,
+      parent_id:          cat.parent_id           || null,
+    });
+    setEditOpen(true);
   };
 
   const handleCreate = async () => {
@@ -45,6 +64,17 @@ export default function Categories() {
     } finally { setSaving(false); }
   };
 
+  const handleUpdate = async () => {
+    if (!editForm.name) return;
+    setEditSaving(true);
+    try {
+      await api.put(`/categories/${editId}`, { ...editForm, minimum_stock: Number(editForm.minimum_stock) || 0 });
+      queryClient.invalidateQueries({ queryKey: ['categories'] });
+      setEditOpen(false);
+      toast({ title: 'Categoría actualizada', description: editForm.name });
+    } finally { setEditSaving(false); }
+  };
+
   const handleDelete = async (id) => {
     if (!confirm('¿Eliminar esta categoría? Sus subcategorías también se eliminarán.')) return;
     await api.delete(`/categories/${id}`);
@@ -56,6 +86,56 @@ export default function Categories() {
     const catItems = items.filter((i) => i.category_id === catId);
     return { total: catItems.length, inStock: catItems.filter((i) => i.status === 'in_stock').length };
   };
+
+  const EditDialog = () => (
+    <Dialog open={editOpen} onOpenChange={setEditOpen}>
+      <DialogContent className="rounded-2xl">
+        <DialogHeader><DialogTitle>Editar Categoría</DialogTitle></DialogHeader>
+        <div className="space-y-4 mt-4">
+          <div className="space-y-1.5">
+            <Label className="text-xs">Nombre *</Label>
+            <Input value={editForm.name} onChange={(e) => setEditForm({ ...editForm, name: e.target.value })} placeholder="Ej: Laptop, Mouse, Monitor" className="rounded-xl" />
+          </div>
+          <div className="space-y-1.5">
+            <Label className="text-xs">Categoría padre</Label>
+            <Select
+              value={editForm.parent_id || 'none'}
+              onValueChange={(v) => setEditForm({ ...editForm, parent_id: v === 'none' ? null : v })}
+            >
+              <SelectTrigger className="rounded-xl"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="none">Ninguna (categoría principal)</SelectItem>
+                {topLevel.filter(c => c.id !== editId).map((c) => (
+                  <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="space-y-1.5">
+            <Label className="text-xs">Stock Mínimo</Label>
+            <Input type="number" min={0} value={editForm.minimum_stock} onChange={(e) => setEditForm({ ...editForm, minimum_stock: e.target.value })} className="rounded-xl" />
+          </div>
+          <div className="flex items-center justify-between p-3 rounded-xl bg-muted/50">
+            <div>
+              <p className="text-sm font-medium">Requiere Activo Fijo</p>
+              <p className="text-xs text-muted-foreground">Equipos con número de activo fijo</p>
+            </div>
+            <Switch checked={editForm.requires_asset_tag} onCheckedChange={(v) => setEditForm({ ...editForm, requires_asset_tag: v })} />
+          </div>
+          <div className="flex items-center justify-between p-3 rounded-xl bg-muted/50">
+            <div>
+              <p className="text-sm font-medium">Identificador Único</p>
+              <p className="text-xs text-muted-foreground">Cada unidad tiene un ID propio</p>
+            </div>
+            <Switch checked={editForm.requires_unique_id} onCheckedChange={(v) => setEditForm({ ...editForm, requires_unique_id: v })} />
+          </div>
+          <Button onClick={handleUpdate} disabled={editSaving} className="w-full rounded-xl">
+            {editSaving ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : null} Guardar Cambios
+          </Button>
+        </div>
+      </DialogContent>
+    </Dialog>
+  );
 
   return (
     <div>
@@ -117,6 +197,8 @@ export default function Categories() {
         }
       />
 
+      <EditDialog />
+
       {categories.length === 0 ? (
         <EmptyState icon={Tags} title="Sin categorías" description="Crea categorías para clasificar tu inventario"
           action={<Button variant="outline" className="rounded-xl" onClick={() => openCreate(null)}>Crear Categoría</Button>} />
@@ -139,6 +221,10 @@ export default function Categories() {
                     <Button variant="ghost" size="icon" className="opacity-0 group-hover:opacity-100 transition-opacity text-muted-foreground hover:text-primary h-8 w-8"
                       onClick={(e) => { e.stopPropagation(); openCreate(cat.id); }} title="Agregar subcategoría">
                       <FolderPlus className="w-4 h-4" />
+                    </Button>
+                    <Button variant="ghost" size="icon" className="opacity-0 group-hover:opacity-100 transition-opacity text-muted-foreground hover:text-primary h-8 w-8"
+                      onClick={(e) => openEdit(cat, e)} title="Editar categoría">
+                      <Pencil className="w-4 h-4" />
                     </Button>
                     <Button variant="ghost" size="icon" className="opacity-0 group-hover:opacity-100 transition-opacity text-muted-foreground hover:text-primary h-8 w-8"
                       onClick={(e) => { e.stopPropagation(); navigate(`/inventory?cat=${cat.id}`); }}>
@@ -175,6 +261,10 @@ export default function Categories() {
                           <CornerDownRight className="w-3 h-3 text-muted-foreground shrink-0" />
                           <span className="flex-1 truncate">{sub.name}</span>
                           <span className="text-muted-foreground">{subCount.total}</span>
+                          <Button variant="ghost" size="icon" className="opacity-0 group-hover/sub:opacity-100 transition-opacity text-muted-foreground hover:text-primary h-6 w-6"
+                            onClick={(e) => openEdit(sub, e)} title="Editar">
+                            <Pencil className="w-3 h-3" />
+                          </Button>
                           <Button variant="ghost" size="icon" className="opacity-0 group-hover/sub:opacity-100 transition-opacity text-muted-foreground hover:text-destructive h-6 w-6"
                             onClick={(e) => { e.stopPropagation(); handleDelete(sub.id); }}>
                             <Trash2 className="w-3 h-3" />

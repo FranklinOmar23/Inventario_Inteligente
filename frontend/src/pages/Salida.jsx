@@ -89,9 +89,9 @@ export default function Salida() {
       return;
     }
 
-    // No exact code match — fall back to a fuzzy search by name/brand/model
+    // No exact code match — fall back to a fuzzy search by name/brand/model/asset_tag
     const nameMatches = items.filter(i =>
-      [i.name, i.brand, i.model].some(v => v?.toLowerCase().includes(ql))
+      [i.name, i.brand, i.model, i.asset_tag, i.service_tag, i.serial_number].some(v => v?.toLowerCase().includes(ql))
     );
     if (nameMatches.length === 1) {
       selectItem(nameMatches[0]);

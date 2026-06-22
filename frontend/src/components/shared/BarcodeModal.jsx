@@ -4,7 +4,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/u
 import { Button } from '@/components/ui/button';
 import { Printer, Download, X } from 'lucide-react';
 
-export default function BarcodeModal({ open, onClose, code, itemName }) {
+export default function BarcodeModal({ open, onClose, code, itemName, assetTag }) {
   const svgRef = useRef(null);
 
   useEffect(() => {
@@ -66,11 +66,16 @@ export default function BarcodeModal({ open, onClose, code, itemName }) {
           font-size: 11px; text-align: center; margin-top: 6px;
           max-width: 240px; word-break: break-word; color: #333;
         }
+        .asset-tag {
+          font-size: 10px; text-align: center; margin-top: 3px;
+          font-family: monospace; color: #555; letter-spacing: 0.5px;
+        }
         @media print { @page { margin: 4mm; size: 60mm 35mm; } }
       </style>
     </head><body>
       ${svg.outerHTML}
       ${itemName ? `<div class="item-name">${itemName}</div>` : ''}
+      ${assetTag ? `<div class="asset-tag">Activo Fijo: ${assetTag}</div>` : ''}
       <script>window.onload = () => { window.print(); window.close(); }<\/script>
     </body></html>`);
     pw.document.close();
@@ -94,9 +99,16 @@ export default function BarcodeModal({ open, onClose, code, itemName }) {
             </p>
           )}
 
-          <p className="text-[11px] text-muted-foreground">
-            Código: <span className="font-mono font-semibold text-foreground">{code}</span>
-          </p>
+          {assetTag && (
+            <p className="text-[11px] text-muted-foreground">
+              Activo Fijo: <span className="font-mono font-semibold text-foreground">{assetTag}</span>
+            </p>
+          )}
+          {!assetTag && (
+            <p className="text-[11px] text-muted-foreground">
+              Código: <span className="font-mono font-semibold text-foreground">{code}</span>
+            </p>
+          )}
         </div>
 
         <div className="flex gap-2 pt-1">

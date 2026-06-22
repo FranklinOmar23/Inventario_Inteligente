@@ -72,7 +72,7 @@ function getBoardDot(log) {
 }
 
 function isBoardLog(log) {
-  if (['entry', 'restored', 'damaged', 'restock'].includes(log.action)) return true;
+  if (['entry', 'restored', 'damaged', 'restock', 'shelf_change', 'transfer'].includes(log.action)) return true;
   if (log.action === 'status_change') return true;
   if (log.details?.toLowerCase().includes('tablero')) return true;
   return false;
@@ -123,7 +123,6 @@ export default function InventoryDetail() {
     queryKey: ['item-logs', id],
     queryFn: () => api.get('/logs', { params: { item_id: id, limit: 50 } }).then(r => r.data),
     enabled: !!id,
-    staleTime: 60_000,
   });
 
   const { data: estantes = [] } = useQuery({
@@ -173,24 +172,27 @@ export default function InventoryDetail() {
       const dept = departments.find(d => d.id === editForm.department_id);
       await api.put(`/inventory/${id}`, {
         ...item,
-        name:           editForm.name,
-        category_id:    editForm.category_id   || null,
-        category_name:  cat?.name              || editForm.category_name || '',
-        department_id:  editForm.department_id || null,
-        department_name: dept?.name            || editForm.department_name || '',
-        brand:          editForm.brand,
-        model:          editForm.model,
-        asset_tag:      editForm.asset_tag,
-        service_tag:    editForm.service_tag,
-        serial_number:  editForm.serial_number,
-        quantity:       Number(editForm.quantity) || 1,
-        unit_cost:      editForm.unit_cost !== '' ? Number(editForm.unit_cost) : null,
-        description:    editForm.description,
-        notes:          editForm.notes,
-        entry_date:     editForm.entry_date || null,
+        name:             editForm.name,
+        category_id:      editForm.category_id   || null,
+        category_name:    cat?.name              || editForm.category_name || '',
+        department_id:    editForm.department_id || null,
+        department_name:  dept?.name             || editForm.department_name || '',
+        brand:            editForm.brand,
+        model:            editForm.model,
+        asset_tag:        editForm.asset_tag,
+        service_tag:      editForm.service_tag,
+        serial_number:    editForm.serial_number,
+        quantity:         Number(editForm.quantity) || 1,
+        unit_cost:        editForm.unit_cost !== '' ? Number(editForm.unit_cost) : null,
+        description:      editForm.description,
+        notes:            editForm.notes,
+        entry_date:       editForm.entry_date || null,
+        performed_by:     user?.full_name || user?.email || 'Sistema',
+        performed_by_id:  user?.id,
       });
       queryClient.invalidateQueries({ queryKey: ['inventory', id] });
       queryClient.invalidateQueries({ queryKey: ['inventory'] });
+      queryClient.invalidateQueries({ queryKey: ['item-logs', id] });
       setEditOpen(false);
       toast({ title: 'Item actualizado', description: editForm.name });
       refetch();
@@ -212,12 +214,17 @@ export default function InventoryDetail() {
       const shelf = estantes.find(e => e.id === selectedShelfId);
       await api.put(`/inventory/${id}`, {
         ...item,
-        shelf_id:   selectedShelfId || null,
-        shelf_name: shelf?.name || '',
+        shelf_id:         selectedShelfId || null,
+        shelf_name:       shelf?.name || '',
+        performed_by:     user?.full_name || user?.email || 'Sistema',
+        performed_by_id:  user?.id,
       });
       queryClient.invalidateQueries({ queryKey: ['inventory', id] });
+      queryClient.invalidateQueries({ queryKey: ['inventory'] });
+      queryClient.invalidateQueries({ queryKey: ['item-logs', id] });
       queryClient.invalidateQueries({ queryKey: ['estantes'] });
       setShelfOpen(false);
+      refetch();
       toast({ title: 'Estante actualizado', description: shelf ? shelf.name : 'Sin estante asignado' });
     } catch {
       toast({ title: 'Error al actualizar estante', variant: 'destructive' });
@@ -259,6 +266,7 @@ export default function InventoryDetail() {
         performed_by_id: user?.id,
       });
       queryClient.invalidateQueries({ queryKey: ['inventory'] });
+      queryClient.invalidateQueries({ queryKey: ['item-logs', id] });
       setStatusOpen(false);
 
       if (statusForm.new_status === 'damaged') {
@@ -721,6 +729,7 @@ export default function InventoryDetail() {
         onClose={() => setBarcodeOpen(false)}
         code={barcodeValue}
         itemName={item.name}
+        assetTag={item.asset_tag || ''}
       />
 
       <LabelPrintModal

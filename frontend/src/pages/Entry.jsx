@@ -63,7 +63,7 @@ const TABS = [
   { id: 'restock', label: 'Reponer Stock',  icon: Plus },
 ];
 
-const EMPTY_INVOICE_ITEM = { include: true, name: '', quantity: 1, unit_cost: '', category_id: '' };
+const EMPTY_INVOICE_ITEM = { include: true, name: '', quantity: 1, unit_cost: '', category_id: '', expiration_date: '' };
 
 function findItDept(departments) {
   return departments.find(d => /\bit\b|tecnolog|sistemas/i.test(d.name)) ?? departments[0];
@@ -399,6 +399,7 @@ export default function Entry() {
           sucursal_id: invoiceCommon.sucursal_id || null,
           sucursal_name: suc?.name || '',
           entry_date: invoiceCommon.entry_date,
+          expiration_date: i.expiration_date || null,
         };
       });
 
@@ -702,6 +703,21 @@ export default function Entry() {
                             </Select>
                           </div>
                         </div>
+                        {isFood && (
+                          <div className="pl-6">
+                            <div className="space-y-1 max-w-[200px]">
+                              <Label className="text-[10px] text-muted-foreground flex items-center gap-1">
+                                <Calendar className="w-3 h-3" /> Fecha de Caducidad
+                              </Label>
+                              <Input
+                                type="date"
+                                value={item.expiration_date || ''}
+                                onChange={e => updateInvoiceItem(idx, 'expiration_date', e.target.value)}
+                                className="rounded-xl h-9 text-xs"
+                              />
+                            </div>
+                          </div>
+                        )}
                       </div>
                     ))}
                   </div>

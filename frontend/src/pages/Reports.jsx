@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import {
   AreaChart, Area, BarChart, Bar, PieChart, Pie, Cell,
@@ -9,9 +9,13 @@ import { es } from 'date-fns/locale';
 import {
   BarChart2, Package, CheckCircle2, ArrowUpFromLine, Layers, Tags,
   Printer, TrendingUp, Activity, PieChart as PieIcon, LayoutGrid, DollarSign,
+  Sparkles, Loader2,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { useTheme } from '@/context/ThemeContext';
 import { useAuth } from '@/context/AuthContext';
 import PageHeader from '@/components/shared/PageHeader';
@@ -53,17 +57,45 @@ const ChartTooltip = ({ active, payload, label }) => {
   );
 };
 
-// ── Section card wrapper ──────────────────────────────────────────────────────
+// ── Section card with print support ──────────────────────────────────────────
 
-function ChartCard({ title, icon: Icon, children, className = '', action }) {
+function ChartCard({ title, icon: Icon, children, className = '', action, printable }) {
+  const ref = useRef(null);
+
+  const handlePrint = () => {
+    if (!ref.current) return;
+    const sid = '__ps__';
+    ref.current.id = sid;
+    const s = document.createElement('style');
+    s.id = '__ps-style__';
+    s.textContent = `@media print {
+      body * { visibility: hidden !important; }
+      #${sid}, #${sid} * { visibility: visible !important; }
+      #${sid} { position: fixed !important; top: 0; left: 0; width: 100% !important; padding: 24px !important; background: white !important; }
+    }`;
+    document.head.appendChild(s);
+    window.print();
+    ref.current.removeAttribute('id');
+    s.remove();
+  };
+
   return (
-    <div className={`glass-card rounded-2xl p-5 animate-card ${className}`}>
+    <div ref={ref} className={`glass-card rounded-2xl p-5 animate-card ${className}`}>
       <div className="flex items-center justify-between mb-4">
         <h3 className="font-semibold text-sm flex items-center gap-2">
           {Icon && <Icon className="w-4 h-4 text-primary" />}
           {title}
         </h3>
-        {action}
+        <div className="flex items-center gap-1">
+          {action}
+          {printable && (
+            <Button variant="ghost" size="icon"
+              className="h-7 w-7 text-muted-foreground hover:text-primary print:hidden"
+              onClick={handlePrint} title="Imprimir esta sección">
+              <Printer className="w-3.5 h-3.5" />
+            </Button>
+          )}
+        </div>
       </div>
       {children}
     </div>
@@ -74,13 +106,9 @@ function ChartCard({ title, icon: Icon, children, className = '', action }) {
 
 function MiniStat({ label, value, icon: Icon, color = 'text-primary', delay = 0 }) {
   return (
-    <div
-      className="glass-card rounded-2xl p-4 flex items-center gap-3 animate-card"
-      style={{ '--delay': `${delay}ms` }}
-    >
+    <div className="glass-card rounded-2xl p-4 flex items-center gap-3 animate-card" style={{ '--delay': `${delay}ms` }}>
       <div className={`w-10 h-10 rounded-xl bg-current/10 flex items-center justify-center shrink-0 animate-bounce-in ${color}`}
-        style={{ '--delay': `${delay + 100}ms` }}
-      >
+        style={{ '--delay': `${delay + 100}ms` }}>
         <Icon className="w-5 h-5" style={{ color: 'currentColor' }} />
       </div>
       <div>
@@ -93,70 +121,112 @@ function MiniStat({ label, value, icon: Icon, color = 'text-primary', delay = 0 
   );
 }
 
-// ── Donut center label ────────────────────────────────────────────────────────
-
-const DonutLabel = ({ viewBox, total }) => {
-  const { cx, cy } = viewBox;
-  return (
-    <text x={cx} y={cy} textAnchor="middle" dominantBaseline="middle">
-      <tspan x={cx} dy="-8" fontSize="22" fontWeight="700" fill="currentColor">{total?.toLocaleString()}</tspan>
-      <tspan x={cx} dy="22" fontSize="11" fill="#6b7280">unidades</tspan>
-    </text>
-  );
-};
 
 // ── Main page ─────────────────────────────────────────────────────────────────
 
 export default function Reports() {
-  const { theme } = useTheme();
+  const { theme }        = useTheme();
   const { user, tenant } = useAuth();
   const isValued  = tenant?.inventory_type === 'valued';
+  const isPhysical = tenant?.inventory_type === 'physical';
   const isDark    = theme === 'dark';
-  const [days, setDays] = useState('30');
 
+  // ── Date range state ──────────────────────────────────────────────────
+  const [dateMode,   setDateMode]   = useState('preset');   // 'preset' | 'custom'
+  const [days,       setDays]       = useState('30');
+  const [customFrom, setCustomFrom] = useState(() => {
+    const d = new Date(); d.setDate(d.getDate() - 30); return d.toISOString().slice(0, 10);
+  });
+  const [customTo,   setCustomTo]   = useState(() => new Date().toISOString().slice(0, 10));
+
+  const isCustomReady = dateMode === 'custom' && customFrom && customTo;
+  const dateParams    = isCustomReady ? `from=${customFrom}&to=${customTo}` : `days=${days}`;
+  const dateLabel     = isCustomReady
+    ? `${customFrom} al ${customTo}`
+    : `Últimos ${days} días`;
+
+  const rangeDays = isCustomReady
+    ? Math.round((new Date(customTo) - new Date(customFrom)) / 86400000) + 1
+    : Number(days);
+  const tickInterval = rangeDays <= 7 ? 0 : rangeDays <= 30 ? 4 : rangeDays <= 60 ? 8 : 14;
+
+  // ── AI analysis state ─────────────────────────────────────────────────
+  const [aiOpen,     setAiOpen]     = useState(false);
+  const [aiLoading,  setAiLoading]  = useState(false);
+  const [aiText,     setAiText]     = useState('');
+
+  // ── Chart theme ───────────────────────────────────────────────────────
   const gridColor = isDark ? 'rgba(255,255,255,0.07)' : 'rgba(0,0,0,0.06)';
   const textColor = isDark ? '#a1a1aa' : '#6b7280';
   const axisProps = { tick: { fill: textColor, fontSize: 11 }, axisLine: false, tickLine: false };
 
-  const q = (key, url) => ({
-    queryKey: [key],
-    queryFn: () => api.get(url).then(r => r.data),
+  // ── Queries ───────────────────────────────────────────────────────────
+  const qOpts = (key, url) => ({ queryKey: [key], queryFn: () => api.get(url).then(r => r.data), staleTime: 30_000 });
+
+  const { data: summary,    isLoading: lSum  } = useQuery(qOpts('rep-summary',    '/reports/summary'));
+  const { data: byStatus,   isLoading: lSt   } = useQuery(qOpts('rep-status',     '/reports/by-status'));
+  const { data: byCategory, isLoading: lCat  } = useQuery(qOpts('rep-category',   '/reports/by-category'));
+  const { data: bySucursal, isLoading: lSuc  } = useQuery(qOpts('rep-sucursal',   '/reports/by-sucursal'));
+  const { data: byEstante,  isLoading: lEst  } = useQuery(qOpts('rep-estante',    '/reports/by-estante'));
+  const { data: topItems,   isLoading: lTop  } = useQuery(qOpts('rep-top',        '/reports/top-items'));
+
+  const { data: activity = [], isLoading: lAct } = useQuery({
+    queryKey: ['rep-activity', dateParams],
+    queryFn: () => api.get(`/reports/activity?${dateParams}`).then(r => r.data),
     staleTime: 30_000,
+    enabled: dateMode === 'preset' || isCustomReady,
   });
 
-  const { data: summary,    isLoading: lSum  } = useQuery(q('rep-summary',    '/reports/summary'));
-  const { data: byStatus,   isLoading: lSt   } = useQuery(q('rep-status',     '/reports/by-status'));
-  const { data: byCategory, isLoading: lCat  } = useQuery(q('rep-category',   '/reports/by-category'));
-  const { data: bySucursal, isLoading: lSuc  } = useQuery(q('rep-sucursal',   '/reports/by-sucursal'));
-  const { data: byEstante,  isLoading: lEst  } = useQuery(q('rep-estante',    '/reports/by-estante'));
-  const { data: topItems,   isLoading: lTop  } = useQuery(q('rep-top',        '/reports/top-items'));
-  const { data: activity,   isLoading: lAct  } = useQuery({
-    queryKey: ['rep-activity', days],
-    queryFn: () => api.get(`/reports/activity?days=${days}`).then(r => r.data),
+  const { data: exits, isLoading: lExit } = useQuery({
+    queryKey: ['rep-exits', dateParams],
+    queryFn: () => api.get(`/reports/exits?${dateParams}`).then(r => r.data),
     staleTime: 30_000,
-  });
-  const isPhysical = tenant?.inventory_type === 'physical';
-  const { data: exits,      isLoading: lExit } = useQuery({
-    queryKey: ['rep-exits', days],
-    queryFn: () => api.get(`/reports/exits?days=${days}`).then(r => r.data),
-    staleTime: 30_000,
-    enabled: !isPhysical,
+    enabled: !isPhysical && (dateMode === 'preset' || isCustomReady),
   });
 
-  // Status data enriched with config
+  // ── Derived data ──────────────────────────────────────────────────────
   const statusData = (byStatus || []).map(r => ({
-    ...r,
-    name:  STATUS_CFG[r.status]?.label || r.status,
-    color: STATUS_CFG[r.status]?.color || '#6b7280',
+    ...r, name: STATUS_CFG[r.status]?.label || r.status, color: STATUS_CFG[r.status]?.color || '#6b7280',
   }));
-
   const totalQty = summary?.total_qty ?? 0;
 
-  const handlePrint = () => window.print();
+  const formatDate = (d) => { try { return format(parseISO(d), 'dd/MM', { locale: es }); } catch { return d; } };
 
-  const formatDate = (d) => {
-    try { return format(parseISO(d), 'dd/MM', { locale: es }); }
-    catch { return d; }
+  // ── AI analysis ───────────────────────────────────────────────────────
+  const handleAiAnalysis = async () => {
+    setAiText('');
+    setAiOpen(true);
+    setAiLoading(true);
+    try {
+      const { data } = await api.post('/ai/report-analysis', {
+        summary, byCategory, byStatus: statusData, activity,
+        exits: !isPhysical ? exits : null,
+        dateLabel,
+      });
+      setAiText(data?.analysis || data?.raw || 'No se pudo generar el análisis.');
+    } catch (err) {
+      const msg = err?.response?.data?.error || err?.message || '';
+      setAiText(msg || 'Error al conectar con la IA. Verifica que el servicio esté disponible.');
+    } finally {
+      setAiLoading(false);
+    }
+  };
+
+  const printAiAnalysis = () => {
+    const el = document.getElementById('__ai-analysis-content');
+    if (!el) return;
+    const sid = '__ai-ps__';
+    el.id = sid;
+    const s = document.createElement('style');
+    s.textContent = `@media print {
+      body * { visibility: hidden !important; }
+      #${sid}, #${sid} * { visibility: visible !important; }
+      #${sid} { position: fixed !important; top: 0; left: 0; width: 100% !important; padding: 40px !important; background: white !important; font-family: Georgia, serif; }
+    }`;
+    document.head.appendChild(s);
+    window.print();
+    el.id = '__ai-analysis-content';
+    s.remove();
   };
 
   return (
@@ -166,11 +236,62 @@ export default function Reports() {
         subtitle="Análisis y estadísticas del inventario"
         icon={BarChart2}
         actions={
-          <Button variant="outline" className="rounded-xl gap-2 print:hidden" onClick={handlePrint}>
-            <Printer className="w-4 h-4" /> Imprimir
+          <Button variant="outline" className="rounded-xl gap-2 print:hidden" onClick={() => window.print()}>
+            <Printer className="w-4 h-4" /> Imprimir todo
           </Button>
         }
       />
+
+      {/* ── Date range filter bar ───────────────────────────────────────── */}
+      <div className="flex flex-wrap items-end gap-3 print:hidden">
+        <div className="space-y-1">
+          <Label className="text-xs text-muted-foreground">Período</Label>
+          <Select
+            value={dateMode === 'custom' ? 'custom' : days}
+            onValueChange={(v) => {
+              if (v === 'custom') { setDateMode('custom'); }
+              else { setDateMode('preset'); setDays(v); }
+            }}
+          >
+            <SelectTrigger className="w-44 rounded-xl h-9 text-sm"><SelectValue /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="7">Últimos 7 días</SelectItem>
+              <SelectItem value="30">Últimos 30 días</SelectItem>
+              <SelectItem value="60">Últimos 60 días</SelectItem>
+              <SelectItem value="90">Últimos 90 días</SelectItem>
+              <SelectItem value="custom">Personalizado</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+
+        {dateMode === 'custom' && (
+          <>
+            <div className="space-y-1">
+              <Label className="text-xs text-muted-foreground">Desde</Label>
+              <Input type="date" value={customFrom} onChange={e => setCustomFrom(e.target.value)}
+                className="rounded-xl h-9 text-sm w-40" />
+            </div>
+            <div className="space-y-1">
+              <Label className="text-xs text-muted-foreground">Hasta</Label>
+              <Input type="date" value={customTo} onChange={e => setCustomTo(e.target.value)}
+                className="rounded-xl h-9 text-sm w-40" max={new Date().toISOString().slice(0, 10)} />
+            </div>
+          </>
+        )}
+
+        <div className="space-y-1">
+          <Label className="text-xs text-transparent select-none">.</Label>
+          <Button
+            variant="outline"
+            className="rounded-xl h-9 gap-2 text-sm border-primary/40 text-primary hover:bg-primary/10"
+            onClick={handleAiAnalysis}
+            disabled={aiLoading}
+          >
+            {aiLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Sparkles className="w-4 h-4" />}
+            Análisis IA
+          </Button>
+        </div>
+      </div>
 
       {/* ── Summary cards ──────────────────────────────────────────────── */}
       <div className={`grid grid-cols-2 md:grid-cols-3 ${isValued ? 'lg:grid-cols-6' : 'lg:grid-cols-5'} gap-3`}>
@@ -186,7 +307,9 @@ export default function Reports() {
             {isValued && (
               <MiniStat
                 label="Valor total"
-                value={summary?.total_value != null ? `RD$${Number(summary.total_value).toLocaleString('es-DO', { minimumFractionDigits: 2 })}` : null}
+                value={summary?.total_value != null
+                  ? `RD$${Number(summary.total_value).toLocaleString('es-DO', { minimumFractionDigits: 2 })}`
+                  : null}
                 icon={DollarSign} color="text-emerald-600" delay={300}
               />
             )}
@@ -197,36 +320,29 @@ export default function Reports() {
       {/* ── Status donut + Activity chart ──────────────────────────────── */}
       <div className="grid lg:grid-cols-5 gap-6">
 
-        {/* Donut */}
-        <ChartCard title="Distribución por Estado" icon={PieIcon} className="lg:col-span-2" style={{ '--delay': '100ms' }}>
+        <ChartCard title="Distribución por Estado" icon={PieIcon} className="lg:col-span-2" printable>
           {lSt ? (
-            <div className="flex items-center justify-center h-64">
-              <Skeleton className="w-48 h-48 rounded-full" />
-            </div>
+            <div className="flex items-center justify-center h-64"><Skeleton className="w-48 h-48 rounded-full" /></div>
           ) : (
             <>
-              <ResponsiveContainer width="100%" height={220}>
-                <PieChart>
-                  <Pie
-                    data={statusData}
-                    cx="50%" cy="50%"
-                    innerRadius={65} outerRadius={95}
-                    paddingAngle={3}
-                    dataKey="quantity"
-                    nameKey="name"
-                    animationBegin={0}
-                    animationDuration={800}
-                  >
-                    {statusData.map((e, i) => (
-                      <Cell key={i} fill={e.color} strokeWidth={0} />
-                    ))}
-                    <LabelList content={<DonutLabel total={totalQty} />} />
-                  </Pie>
-                  <Tooltip content={<ChartTooltip />} />
-                </PieChart>
-              </ResponsiveContainer>
-
-              {/* Legend */}
+              <div className="relative">
+                <ResponsiveContainer width="100%" height={220}>
+                  <PieChart>
+                    <Pie data={statusData} cx="50%" cy="50%"
+                      innerRadius={65} outerRadius={95} paddingAngle={3}
+                      dataKey="quantity" nameKey="name" animationBegin={0} animationDuration={800}>
+                      {statusData.map((e, i) => <Cell key={i} fill={e.color} strokeWidth={0} />)}
+                    </Pie>
+                    <Tooltip content={<ChartTooltip />} />
+                  </PieChart>
+                </ResponsiveContainer>
+                <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+                  <div className="text-center">
+                    <span className="block text-[22px] font-bold text-foreground leading-none">{totalQty?.toLocaleString()}</span>
+                    <span className="block text-[11px] text-muted-foreground mt-1">unidades</span>
+                  </div>
+                </div>
+              </div>
               <div className="grid grid-cols-2 gap-x-4 gap-y-1.5 mt-2">
                 {statusData.map((e, i) => (
                   <div key={i} className="flex items-center gap-2 text-xs">
@@ -240,27 +356,11 @@ export default function Reports() {
           )}
         </ChartCard>
 
-        {/* Activity area */}
-        <ChartCard
-          title="Actividad"
-          icon={Activity}
-          className="lg:col-span-3"
-          action={
-            <Select value={days} onValueChange={setDays}>
-              <SelectTrigger className="h-7 text-xs w-32 rounded-lg">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="7">Últimos 7 días</SelectItem>
-                <SelectItem value="30">Últimos 30 días</SelectItem>
-                <SelectItem value="60">Últimos 60 días</SelectItem>
-                <SelectItem value="90">Últimos 90 días</SelectItem>
-              </SelectContent>
-            </Select>
-          }
-        >
+        <ChartCard title={`Actividad · ${dateLabel}`} icon={Activity} className="lg:col-span-3" printable>
           {lAct ? (
             <Skeleton className="h-56 w-full rounded-xl" />
+          ) : !activity?.length ? (
+            <div className="flex items-center justify-center h-56 text-sm text-muted-foreground">Sin actividad registrada en este período</div>
           ) : (
             <ResponsiveContainer width="100%" height={240}>
               <AreaChart data={activity} margin={{ top: 4, right: 4, left: -20, bottom: 0 }}>
@@ -273,16 +373,10 @@ export default function Reports() {
                   ))}
                 </defs>
                 <CartesianGrid strokeDasharray="3 3" stroke={gridColor} vertical={false} />
-                <XAxis
-                  dataKey="date"
-                  tickFormatter={formatDate}
-                  interval={Number(days) <= 7 ? 0 : Number(days) <= 30 ? 4 : 8}
-                  {...axisProps}
-                />
+                <XAxis dataKey="date" tickFormatter={formatDate} interval={tickInterval} {...axisProps} />
                 <YAxis {...axisProps} allowDecimals={false} />
                 <Tooltip content={<ChartTooltip />} />
-                <Legend
-                  iconType="circle" iconSize={8}
+                <Legend iconType="circle" iconSize={8}
                   formatter={v => <span style={{ color: textColor, fontSize: 11 }}>
                     {v === 'entry' ? 'Entradas' : v === 'checkout' ? 'Salidas' : 'Devoluciones'}
                   </span>}
@@ -297,7 +391,7 @@ export default function Reports() {
       </div>
 
       {/* ── By category (horizontal bar) ───────────────────────────────── */}
-      <ChartCard title="Inventario por Categoría" icon={Tags} style={{ '--delay': '200ms' }}>
+      <ChartCard title="Inventario por Categoría" icon={Tags} printable>
         {lCat ? (
           <Skeleton className="h-72 w-full rounded-xl" />
         ) : byCategory?.length === 0 ? (
@@ -310,9 +404,7 @@ export default function Reports() {
               <YAxis type="category" dataKey="name" width={130} {...axisProps} tick={{ ...axisProps.tick, fontSize: 12 }} />
               <Tooltip content={<ChartTooltip />} />
               <Bar dataKey="quantity" name="Cantidad" radius={[0, 6, 6, 0]} animationDuration={800}>
-                {byCategory.map((_, i) => (
-                  <Cell key={i} fill={CAT_COLORS[i % CAT_COLORS.length]} />
-                ))}
+                {byCategory.map((_, i) => <Cell key={i} fill={CAT_COLORS[i % CAT_COLORS.length]} />)}
                 <LabelList dataKey="quantity" position="right" style={{ fill: textColor, fontSize: 11, fontWeight: 600 }} />
               </Bar>
             </BarChart>
@@ -322,9 +414,7 @@ export default function Reports() {
 
       {/* ── Sucursal + Top items ────────────────────────────────────────── */}
       <div className="grid lg:grid-cols-2 gap-6">
-
-        {/* By sucursal */}
-        <ChartCard title="Por Sucursal" icon={TrendingUp} style={{ '--delay': '260ms' }}>
+        <ChartCard title="Por Sucursal" icon={TrendingUp} printable>
           {lSuc ? (
             <Skeleton className="h-52 w-full rounded-xl" />
           ) : bySucursal?.length === 0 ? (
@@ -337,21 +427,16 @@ export default function Reports() {
                 <YAxis {...axisProps} allowDecimals={false} />
                 <Tooltip content={<ChartTooltip />} />
                 <Bar dataKey="quantity" name="Cantidad" radius={[6, 6, 0, 0]} animationDuration={800}>
-                  {bySucursal.map((_, i) => (
-                    <Cell key={i} fill={CAT_COLORS[i % CAT_COLORS.length]} />
-                  ))}
+                  {bySucursal.map((_, i) => <Cell key={i} fill={CAT_COLORS[i % CAT_COLORS.length]} />)}
                 </Bar>
               </BarChart>
             </ResponsiveContainer>
           )}
         </ChartCard>
 
-        {/* Top items by movement */}
-        <ChartCard title="Ítems más Activos" icon={TrendingUp} style={{ '--delay': '300ms' }}>
+        <ChartCard title="Ítems más Activos" icon={TrendingUp} printable>
           {lTop ? (
-            <div className="space-y-2">
-              {[0,1,2,3,4].map(i => <Skeleton key={i} className="h-8 rounded-lg" />)}
-            </div>
+            <div className="space-y-2">{[0,1,2,3,4].map(i => <Skeleton key={i} className="h-8 rounded-lg" />)}</div>
           ) : topItems?.length === 0 ? (
             <p className="text-sm text-muted-foreground text-center py-10">Sin actividad registrada</p>
           ) : (
@@ -364,10 +449,8 @@ export default function Reports() {
                     <div className="flex-1 min-w-0">
                       <p className="text-xs font-medium truncate mb-1">{item.name}</p>
                       <div className="h-1.5 bg-muted rounded-full overflow-hidden">
-                        <div
-                          className="h-full rounded-full transition-all duration-700"
-                          style={{ width: `${pct}%`, background: CAT_COLORS[i % CAT_COLORS.length] }}
-                        />
+                        <div className="h-full rounded-full transition-all duration-700"
+                          style={{ width: `${pct}%`, background: CAT_COLORS[i % CAT_COLORS.length] }} />
                       </div>
                     </div>
                     <span className="text-xs font-bold text-muted-foreground shrink-0 w-8 text-right">{item.movements}</span>
@@ -379,71 +462,66 @@ export default function Reports() {
         </ChartCard>
       </div>
 
-      {/* ── Salidas de Mercancía (no aplica a Inventario Físico) ───────── */}
+      {/* ── Salidas de Mercancía ───────────────────────────────────────── */}
       {!isPhysical && (
-      <div className="grid lg:grid-cols-5 gap-6">
-        <div className="lg:col-span-2 grid grid-cols-1 gap-3">
-          {lExit ? (
-            <>{[0,1].map(i => <SkeletonStat key={i} />)}</>
-          ) : (
-            <>
-              <MiniStat label="Salidas registradas" value={exits?.summary?.count}    icon={ArrowUpFromLine} color="text-rose-500"  delay={0}  />
-              <MiniStat label="Unidades de salida"   value={exits?.summary?.quantity} icon={Package}         color="text-amber-500" delay={60} />
-              {isValued && (
-                <MiniStat
-                  label="Valor de salidas"
-                  value={exits?.summary?.total_value != null ? `RD$${Number(exits.summary.total_value).toLocaleString('es-DO', { minimumFractionDigits: 2 })}` : null}
-                  icon={DollarSign} color="text-rose-600" delay={120}
-                />
-              )}
-            </>
-          )}
-        </div>
+        <div className="grid lg:grid-cols-5 gap-6">
+          <div className="lg:col-span-2 grid grid-cols-1 gap-3">
+            {lExit ? (
+              <>{[0,1].map(i => <SkeletonStat key={i} />)}</>
+            ) : (
+              <>
+                <MiniStat label="Salidas registradas" value={exits?.summary?.count}    icon={ArrowUpFromLine} color="text-rose-500"  delay={0}  />
+                <MiniStat label="Unidades de salida"   value={exits?.summary?.quantity} icon={Package}         color="text-amber-500" delay={60} />
+                {isValued && (
+                  <MiniStat
+                    label="Valor de salidas"
+                    value={exits?.summary?.total_value != null
+                      ? `RD$${Number(exits.summary.total_value).toLocaleString('es-DO', { minimumFractionDigits: 2 })}`
+                      : null}
+                    icon={DollarSign} color="text-rose-600" delay={120}
+                  />
+                )}
+              </>
+            )}
+          </div>
 
-        <ChartCard title="Salidas por Motivo" icon={ArrowUpFromLine} className="lg:col-span-3" style={{ '--delay': '320ms' }}>
-          {lExit ? (
-            <Skeleton className="h-52 w-full rounded-xl" />
-          ) : !exits?.by_reason?.length ? (
-            <p className="text-sm text-muted-foreground text-center py-10">Sin salidas registradas en este período</p>
-          ) : (
-            <ResponsiveContainer width="100%" height={Math.max(200, exits.by_reason.length * 38)}>
-              <BarChart layout="vertical" data={exits.by_reason} margin={{ top: 0, right: 60, left: 4, bottom: 0 }}>
-                <CartesianGrid strokeDasharray="3 3" stroke={gridColor} horizontal={false} />
-                <XAxis type="number" {...axisProps} allowDecimals={false} />
-                <YAxis type="category" dataKey="reason" width={130} {...axisProps} tick={{ ...axisProps.tick, fontSize: 12 }} />
-                <Tooltip content={<ChartTooltip />} />
-                <Bar dataKey="quantity" name="Cantidad" radius={[0, 6, 6, 0]} animationDuration={800}>
-                  {exits.by_reason.map((_, i) => (
-                    <Cell key={i} fill={CAT_COLORS[i % CAT_COLORS.length]} />
-                  ))}
-                  <LabelList dataKey="quantity" position="right" style={{ fill: textColor, fontSize: 11, fontWeight: 600 }} />
-                </Bar>
-              </BarChart>
-            </ResponsiveContainer>
-          )}
-        </ChartCard>
-      </div>
+          <ChartCard title={`Salidas por Motivo · ${dateLabel}`} icon={ArrowUpFromLine} className="lg:col-span-3" printable>
+            {lExit ? (
+              <Skeleton className="h-52 w-full rounded-xl" />
+            ) : !exits?.by_reason?.length ? (
+              <p className="text-sm text-muted-foreground text-center py-10">Sin salidas registradas en este período</p>
+            ) : (
+              <ResponsiveContainer width="100%" height={Math.max(200, exits.by_reason.length * 38)}>
+                <BarChart layout="vertical" data={exits.by_reason} margin={{ top: 0, right: 60, left: 4, bottom: 0 }}>
+                  <CartesianGrid strokeDasharray="3 3" stroke={gridColor} horizontal={false} />
+                  <XAxis type="number" {...axisProps} allowDecimals={false} />
+                  <YAxis type="category" dataKey="reason" width={130} {...axisProps} tick={{ ...axisProps.tick, fontSize: 12 }} />
+                  <Tooltip content={<ChartTooltip />} />
+                  <Bar dataKey="quantity" name="Cantidad" radius={[0, 6, 6, 0]} animationDuration={800}>
+                    {exits.by_reason.map((_, i) => <Cell key={i} fill={CAT_COLORS[i % CAT_COLORS.length]} />)}
+                    <LabelList dataKey="quantity" position="right" style={{ fill: textColor, fontSize: 11, fontWeight: 600 }} />
+                  </Bar>
+                </BarChart>
+              </ResponsiveContainer>
+            )}
+          </ChartCard>
+        </div>
       )}
 
       {/* ── By estante ─────────────────────────────────────────────────── */}
       {(byEstante?.length > 0 || lEst) && (
-        <ChartCard title="Inventario por Estante / Contenedor" icon={LayoutGrid} style={{ '--delay': '340ms' }}>
+        <ChartCard title="Inventario por Estante / Contenedor" icon={LayoutGrid} printable>
           {lEst ? (
             <Skeleton className="h-52 w-full rounded-xl" />
           ) : (
             <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
               {byEstante.map((e, i) => (
-                <div
-                  key={i}
-                  className="flex items-center gap-3 p-3 rounded-xl bg-muted/40 animate-card"
-                  style={{ '--delay': `${i * 40}ms` }}
-                >
+                <div key={i} className="flex items-center gap-3 p-3 rounded-xl bg-muted/40 animate-card"
+                  style={{ '--delay': `${i * 40}ms` }}>
                   <Container3DIcon type={e.type || 'estante'} size={36} animated={false} />
                   <div className="min-w-0 flex-1">
                     <p className="text-xs font-semibold truncate">{e.name}</p>
-                    {e.sucursal_name && (
-                      <p className="text-[10px] text-muted-foreground truncate">{e.sucursal_name}</p>
-                    )}
+                    {e.sucursal_name && <p className="text-[10px] text-muted-foreground truncate">{e.sucursal_name}</p>}
                   </div>
                   <div className="text-right shrink-0">
                     <p className="text-base font-bold text-primary">{Number(e.quantity).toLocaleString()}</p>
@@ -455,6 +533,43 @@ export default function Reports() {
           )}
         </ChartCard>
       )}
+
+      {/* ── AI Analysis Dialog ─────────────────────────────────────────── */}
+      <Dialog open={aiOpen} onOpenChange={setAiOpen}>
+        <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto rounded-2xl">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Sparkles className="w-4 h-4 text-primary" />
+              Análisis de Inventario · IA
+            </DialogTitle>
+          </DialogHeader>
+
+          <p className="text-xs text-muted-foreground -mt-1">Período: {dateLabel}</p>
+
+          {aiLoading ? (
+            <div className="flex flex-col items-center justify-center py-16 gap-3">
+              <Loader2 className="w-8 h-8 animate-spin text-primary" />
+              <p className="text-sm text-muted-foreground">Generando análisis con IA...</p>
+              <p className="text-xs text-muted-foreground/60">Esto puede tomar unos segundos</p>
+            </div>
+          ) : (
+            <div
+              id="__ai-analysis-content"
+              className="whitespace-pre-line text-sm leading-relaxed mt-2 space-y-1 text-foreground"
+            >
+              {aiText}
+            </div>
+          )}
+
+          {!aiLoading && aiText && (
+            <div className="flex gap-2 justify-end pt-4 border-t border-border print:hidden">
+              <Button variant="outline" className="rounded-xl gap-2" onClick={printAiAnalysis}>
+                <Printer className="w-4 h-4" /> Imprimir / PDF
+              </Button>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

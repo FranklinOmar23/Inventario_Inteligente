@@ -13,7 +13,7 @@ export default defineConfig({
   server: {
     port: 5173,
     proxy: {
-      '/api': { target: 'http://localhost:3001', changeOrigin: true, proxyTimeout: 60000, timeout: 60000 },
+      '/api': { target: 'http://localhost:3001', changeOrigin: true, proxyTimeout: 120000, timeout: 120000 },
       '/uploads': { target: 'http://localhost:3001', changeOrigin: true },
     },
   },

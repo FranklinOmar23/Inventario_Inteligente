@@ -216,7 +216,7 @@ export default function DepartmentDetail() {
                             size="icon"
                             className="h-7 w-7 text-muted-foreground"
                             title="Código de barras"
-                            onClick={() => setBarcode({ open: true, code, itemName: item.name })}
+                            onClick={() => setBarcode({ open: true, code, itemName: item.name, assetTag: item.asset_tag || '' })}
                           >
                             <Barcode className="w-3.5 h-3.5" />
                           </Button>
@@ -236,9 +236,10 @@ export default function DepartmentDetail() {
 
       <BarcodeModal
         open={barcode.open}
-        onClose={() => setBarcode({ open: false, code: '', itemName: '' })}
+        onClose={() => setBarcode({ open: false, code: '', itemName: '', assetTag: '' })}
         code={barcode.code}
         itemName={barcode.itemName}
+        assetTag={barcode.assetTag}
       />
     </div>
   );

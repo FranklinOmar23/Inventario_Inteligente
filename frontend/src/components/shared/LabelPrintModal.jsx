@@ -19,14 +19,14 @@ function fmt(d) {
 // Fix: author the content as a portrait card (CARD_*), then for printing
 // pre-rotate it 90° so the hardware's own rotation cancels out, while the
 // outer @page stays landscape (PAGE_*) matching the proven-correct physical size.
-const PAGE_WIDTH_MM  = 50.6; // 4in — true physical label size (landscape)
+const PAGE_WIDTH_MM  = 70.6; // 4in — true physical label size (landscape)
 const PAGE_HEIGHT_MM = 45.2;  // 3in
 const CARD_WIDTH_MM  = PAGE_HEIGHT_MM; // 76.2mm — portrait card, swapped
 const CARD_HEIGHT_MM = PAGE_WIDTH_MM;  // 101.6mm
 
 function LabelCard({ item, forPrint, m, u }) {
   const qrValue = item.id;
-  const QR_SIZE = forPrint ? Math.round(32 * 3.78) : 32 * m; // 32mm QR
+  const QR_SIZE = forPrint ? Math.round(25 * 2.78) : 20 * m; // 32mm QR
 
   return (
     <div style={{
@@ -46,15 +46,16 @@ function LabelCard({ item, forPrint, m, u }) {
       {/* QR centrado */}
       <QRCodeSVG value={qrValue} size={QR_SIZE} level="M" style={{ display: 'block', flexShrink: 0 }} />
 
-      {/* Nombre */}
-      <div style={{
-        fontSize: forPrint ? '13pt' : `${13 * m / 3}px`,
-        fontWeight: 900, lineHeight: 1.2,
-        overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
-        maxWidth: '100%',
-      }}>
-        {item.name}
-      </div>
+      {/* Activo Fijo */}
+      {item.asset_tag && (
+        <div style={{
+          fontSize: forPrint ? '9pt' : `${9 * m / 3}px`,
+          fontFamily: 'monospace', fontWeight: 700,
+          letterSpacing: '0.03em', color: '#222',
+        }}>
+          AF: {item.asset_tag}
+        </div>
+      )}
 
       {/* Fecha + Sucursal */}
       <div style={{ display: 'flex', flexDirection: 'column', gap: `${1 * m}${u}`, alignItems: 'center' }}>

@@ -1,6 +1,7 @@
 import React from 'react';
 import { Outlet, Navigate, useLocation } from 'react-router-dom';
 import Sidebar from './Sidebar';
+import InventiaChat from './InventiaChat';
 import { useAuth } from '@/context/AuthContext';
 import { Box } from 'lucide-react';
 
@@ -71,6 +72,7 @@ export default function Layout() {
       >
         <Outlet />
       </main>
+      <InventiaChat />
     </div>
   );
 }

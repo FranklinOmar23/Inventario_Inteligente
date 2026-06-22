@@ -1,7 +1,10 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useCallback } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Link, useSearchParams } from 'react-router-dom';
-import { Package, Plus, Trash2, Download, Barcode, RotateCcw, Archive, Loader2, AlertTriangle } from 'lucide-react';
+import {
+  Package, Plus, Trash2, Download, Barcode, RotateCcw, Archive,
+  Loader2, AlertTriangle, CheckSquare, Square, X,
+} from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
@@ -27,6 +30,13 @@ const STATUS_LABELS = {
   retired:     { label: 'Retirado',       cls: 'bg-gray-500/10   text-gray-500   border-gray-500/20' },
 };
 
+const BULK_STATUS_OPTIONS = [
+  { value: 'maintenance', label: 'Mantenimiento' },
+  { value: 'revision',    label: 'Revisión' },
+  { value: 'retired',     label: 'Retirado (Desahucio)' },
+  { value: 'damaged',     label: 'Dañado / Baja' },
+];
+
 export default function Inventory() {
   const queryClient = useQueryClient();
   const { toast }   = useToast();
@@ -35,15 +45,18 @@ export default function Inventory() {
   const [searchParams] = useSearchParams();
 
   const [search,       setSearch]       = useState('');
-  const [statusFilter, setStatusFilter] = useState('all');
+  const [statusFilter, setStatusFilter] = useState('in_stock');
   const [catFilter,    setCatFilter]    = useState(searchParams.get('cat') || 'all');
   const [deptFilter,   setDeptFilter]   = useState('all');
   const [shelfFilter,  setShelfFilter]  = useState('all');
   const [page,         setPage]         = useState(1);
   const [pageSize,     setPageSize]     = useState(DEFAULT_PAGE_SIZE);
-  const [barcodeModal, setBarcodeModal] = useState({ open: false, code: '', itemName: '' });
+  const [barcodeModal, setBarcodeModal] = useState({ open: false, code: '', itemName: '', assetTag: '' });
 
-  // Bulk retire dialog
+  // Multi-select
+  const [selectedIds, setSelectedIds] = useState(new Set());
+
+  // Bulk move dialog
   const [bulkOpen,    setBulkOpen]    = useState(false);
   const [bulkStatus,  setBulkStatus]  = useState('retired');
   const [bulkLoading, setBulkLoading] = useState(false);
@@ -72,28 +85,72 @@ export default function Inventory() {
   const totalPages = Math.ceil(filtered.length / pageSize);
   const paginated  = filtered.slice((page - 1) * pageSize, page * pageSize);
 
-  const resetPage = (fn) => (val) => { fn(val); setPage(1); };
+  const resetPage = (fn) => (val) => { fn(val); setPage(1); setSelectedIds(new Set()); };
 
+  // ── Multi-select helpers ──────────────────────────────────────────────────
+  const toggleSelect = useCallback((id) => {
+    setSelectedIds(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
+  }, []);
+
+  const allPageSelected = paginated.length > 0 && paginated.every(i => selectedIds.has(i.id));
+  const somePageSelected = paginated.some(i => selectedIds.has(i.id));
+
+  const toggleSelectAll = useCallback(() => {
+    setSelectedIds(prev => {
+      const next = new Set(prev);
+      if (allPageSelected) {
+        paginated.forEach(i => next.delete(i.id));
+      } else {
+        paginated.forEach(i => next.add(i.id));
+      }
+      return next;
+    });
+  }, [paginated, allPageSelected]);
+
+  const clearSelection = () => setSelectedIds(new Set());
+
+  // ── Delete ────────────────────────────────────────────────────────────────
   const handleDelete = async (id, name) => {
     if (!confirm(`¿Eliminar "${name}"?`)) return;
     await api.delete(`/inventory/${id}`);
     queryClient.invalidateQueries({ queryKey: ['inventory'] });
+    setSelectedIds(prev => { const n = new Set(prev); n.delete(id); return n; });
     toast({ title: 'Item eliminado', description: name });
   };
+
+  const handleBulkDelete = async () => {
+    const ids = [...selectedIds];
+    if (!confirm(`¿Eliminar ${ids.length} item(s) seleccionado(s)? Esta acción no se puede deshacer.`)) return;
+    try {
+      await Promise.all(ids.map(id => api.delete(`/inventory/${id}`)));
+      queryClient.invalidateQueries({ queryKey: ['inventory'] });
+      clearSelection();
+      toast({ title: `${ids.length} item(s) eliminados` });
+    } catch (err) {
+      toast({ title: 'Error', description: err.response?.data?.error || 'Error al eliminar', variant: 'destructive' });
+    }
+  };
+
+  // ── Bulk move to tablero ──────────────────────────────────────────────────
+  const hasSelection = selectedIds.size > 0;
 
   const handleBulkStatus = async () => {
     setBulkLoading(true);
     try {
-      const { data } = await api.post('/inventory/bulk-status', {
-        new_status:      bulkStatus,
-        all:             true,
-        performed_by:    user?.full_name || user?.email || 'Sistema',
-        performed_by_id: user?.id,
-      });
+      const payload = hasSelection
+        ? { new_status: bulkStatus, all: false, item_ids: [...selectedIds], performed_by: user?.full_name || user?.email || 'Sistema', performed_by_id: user?.id }
+        : { new_status: bulkStatus, all: true, performed_by: user?.full_name || user?.email || 'Sistema', performed_by_id: user?.id };
+
+      const { data } = await api.post('/inventory/bulk-status', payload);
       queryClient.invalidateQueries({ queryKey: ['inventory'] });
       queryClient.invalidateQueries({ queryKey: ['inventory-damaged'] });
       toast({ title: 'Operación completada', description: `${data.updated} equipos movidos al Tablero` });
       setBulkOpen(false);
+      clearSelection();
     } catch (err) {
       toast({ title: 'Error', description: err.response?.data?.error || 'Error en la operación', variant: 'destructive' });
     } finally {
@@ -124,12 +181,7 @@ export default function Inventory() {
     totalValue:  items.reduce((sum, i) => sum + (i.unit_cost != null ? Number(i.unit_cost) * i.quantity : 0), 0),
   }), [items]);
 
-  const BULK_STATUS_OPTIONS = [
-    { value: 'maintenance', label: 'Mantenimiento' },
-    { value: 'revision',    label: 'Revisión' },
-    { value: 'retired',     label: 'Retirado (Desahucio)' },
-    { value: 'damaged',     label: 'Dañado / Baja' },
-  ];
+  const activeCount = items.filter(i => !['maintenance','revision','retired','damaged'].includes(i.status)).length;
 
   return (
     <div className="flex gap-6 min-h-0">
@@ -145,9 +197,13 @@ export default function Inventory() {
               <Button variant="outline" className="rounded-xl gap-1.5" onClick={downloadReport}>
                 <Download className="w-4 h-4" /> Descargar Reporte
               </Button>
-              <Button variant="outline" className="rounded-xl gap-1.5 text-orange-600 border-orange-300 hover:bg-orange-500/10"
-                onClick={() => setBulkOpen(true)}>
-                <Archive className="w-4 h-4" /> Mover al Tablero
+              <Button
+                variant="outline"
+                className="rounded-xl gap-1.5 text-orange-600 border-orange-300 hover:bg-orange-500/10"
+                onClick={() => setBulkOpen(true)}
+              >
+                <Archive className="w-4 h-4" />
+                {hasSelection ? `Mover seleccionados (${selectedIds.size})` : 'Mover al Tablero'}
               </Button>
               <Link to="/entry">
                 <Button className="rounded-xl gap-1.5"><Plus className="w-4 h-4" /> Registrar Entrada</Button>
@@ -156,14 +212,14 @@ export default function Inventory() {
           }
         />
 
-        {/* ── Filters with labels ─────────────────────────────────────── */}
-        <div className="flex flex-wrap gap-4 mb-6">
+        {/* ── Filters ─────────────────────────────────────────────────── */}
+        <div className="flex flex-wrap gap-4 mb-4">
           <div className="flex-1 min-w-48 space-y-1">
             <Label className="text-xs text-muted-foreground">Buscar</Label>
             <ScanSearchInput
               placeholder="Nombre, activo fijo, service tag, QR..."
               value={search}
-              onChange={(v) => { setSearch(v); setPage(1); }}
+              onChange={(v) => { setSearch(v); setPage(1); setSelectedIds(new Set()); }}
             />
           </div>
           <div className="space-y-1">
@@ -221,6 +277,39 @@ export default function Inventory() {
           )}
         </div>
 
+        {/* ── Bulk action bar ─────────────────────────────────────────── */}
+        {hasSelection && (
+          <div className="flex items-center gap-3 mb-4 px-4 py-2.5 rounded-xl bg-primary/5 border border-primary/20 animate-in slide-in-from-top-1 duration-150">
+            <CheckSquare className="w-4 h-4 text-primary shrink-0" />
+            <span className="text-sm font-medium text-primary flex-1">
+              {selectedIds.size} item(s) seleccionado(s)
+            </span>
+            <Button
+              size="sm"
+              variant="outline"
+              className="rounded-lg gap-1.5 text-destructive border-destructive/30 hover:bg-destructive/10 h-7 text-xs"
+              onClick={handleBulkDelete}
+            >
+              <Trash2 className="w-3.5 h-3.5" /> Eliminar
+            </Button>
+            <Button
+              size="sm"
+              variant="outline"
+              className="rounded-lg gap-1.5 text-orange-600 border-orange-300 hover:bg-orange-500/10 h-7 text-xs"
+              onClick={() => setBulkOpen(true)}
+            >
+              <Archive className="w-3.5 h-3.5" /> Mover al Tablero
+            </Button>
+            <button
+              onClick={clearSelection}
+              className="text-muted-foreground hover:text-foreground transition-colors"
+              title="Limpiar selección"
+            >
+              <X className="w-4 h-4" />
+            </button>
+          </div>
+        )}
+
         {isLoading ? (
           <SkeletonTable rows={10} />
         ) : filtered.length === 0 ? (
@@ -233,6 +322,20 @@ export default function Inventory() {
               <table className="w-full text-sm">
                 <thead>
                   <tr className="border-b border-border bg-muted/30">
+                    {/* Select-all checkbox */}
+                    <th className="w-10 px-3 py-3">
+                      <button
+                        onClick={toggleSelectAll}
+                        className="flex items-center justify-center text-muted-foreground hover:text-foreground transition-colors"
+                        title={allPageSelected ? 'Deseleccionar página' : 'Seleccionar página'}
+                      >
+                        {allPageSelected
+                          ? <CheckSquare className="w-4 h-4 text-primary" />
+                          : somePageSelected
+                            ? <CheckSquare className="w-4 h-4 text-primary/50" />
+                            : <Square className="w-4 h-4" />}
+                      </button>
+                    </th>
                     {[
                       'Nombre', 'Categoría', 'Departamento', 'Estante', 'Estado', 'Qty',
                       ...(isValued ? ['Valor Total'] : []),
@@ -244,19 +347,34 @@ export default function Inventory() {
                 </thead>
                 <tbody>
                   {paginated.map((item, idx) => {
-                    const s    = STATUS_LABELS[item.status] || STATUS_LABELS.in_stock;
-                    const code = item.asset_tag || item.service_tag || item.serial_number || '';
+                    const s       = STATUS_LABELS[item.status] || STATUS_LABELS.in_stock;
+                    const code    = item.asset_tag || item.service_tag || item.serial_number || '';
+                    const checked = selectedIds.has(item.id);
                     return (
                       <tr
                         key={item.id}
-                        className="border-b border-border last:border-0 hover:bg-muted/20 transition-colors animate-card"
+                        className={`border-b border-border last:border-0 hover:bg-muted/20 transition-colors animate-card ${checked ? 'bg-primary/5' : ''}`}
                         style={{ '--delay': `${Math.min(idx * 30, 300)}ms` }}
                       >
+                        {/* Row checkbox */}
+                        <td className="px-3 py-3">
+                          <button
+                            onClick={() => toggleSelect(item.id)}
+                            className="flex items-center justify-center text-muted-foreground hover:text-primary transition-colors"
+                          >
+                            {checked
+                              ? <CheckSquare className="w-4 h-4 text-primary" />
+                              : <Square className="w-4 h-4" />}
+                          </button>
+                        </td>
                         <td className="px-4 py-3">
                           <Link to={`/inventory/${item.id}`} className="hover:text-primary transition-colors">
                             <p className="font-medium">{item.name}</p>
                             {(item.brand || item.model) && (
                               <p className="text-xs text-muted-foreground">{[item.brand, item.model].filter(Boolean).join(' · ')}</p>
+                            )}
+                            {item.asset_tag && (
+                              <p className="text-[11px] font-mono text-muted-foreground/70 mt-0.5">AF: {item.asset_tag}</p>
                             )}
                           </Link>
                         </td>
@@ -298,7 +416,7 @@ export default function Inventory() {
                             {code && (
                               <Button variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground hover:text-foreground"
                                 title="Ver código de barras"
-                                onClick={() => setBarcodeModal({ open: true, code, itemName: item.name })}>
+                                onClick={() => setBarcodeModal({ open: true, code, itemName: item.name, assetTag: item.asset_tag || '' })}>
                                 <Barcode className="w-3.5 h-3.5" />
                               </Button>
                             )}
@@ -328,9 +446,10 @@ export default function Inventory() {
 
         <BarcodeModal
           open={barcodeModal.open}
-          onClose={() => setBarcodeModal({ open: false, code: '', itemName: '' })}
+          onClose={() => setBarcodeModal({ open: false, code: '', itemName: '', assetTag: '' })}
           code={barcodeModal.code}
           itemName={barcodeModal.itemName}
+          assetTag={barcodeModal.assetTag}
         />
       </div>
 
@@ -394,17 +513,17 @@ export default function Inventory() {
             <div className="flex items-start gap-3 p-3 rounded-xl bg-orange-500/10 border border-orange-500/20 text-orange-700 text-xs">
               <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" />
               <p>
-                Todos los equipos <strong>activos en el inventario</strong> serán movidos al estado seleccionado y aparecerán en el Tablero.
-                Esta acción queda registrada en el historial.
+                {hasSelection
+                  ? <>Se moverán los <strong>{selectedIds.size} equipos seleccionados</strong> al estado indicado.</>
+                  : <>Todos los equipos <strong>activos en el inventario</strong> serán movidos al estado seleccionado.</>}
+                {' '}Esta acción queda registrada en el historial.
               </p>
             </div>
 
             <div className="space-y-1.5">
               <Label className="text-xs">Mover a</Label>
               <Select value={bulkStatus} onValueChange={setBulkStatus}>
-                <SelectTrigger className="rounded-xl">
-                  <SelectValue />
-                </SelectTrigger>
+                <SelectTrigger className="rounded-xl"><SelectValue /></SelectTrigger>
                 <SelectContent>
                   {BULK_STATUS_OPTIONS.map(o => (
                     <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>
@@ -414,7 +533,9 @@ export default function Inventory() {
             </div>
 
             <p className="text-xs text-muted-foreground">
-              Se moverán <strong>{items.filter(i => !['maintenance','revision','retired','damaged'].includes(i.status)).length}</strong> equipos activos.
+              Se moverán <strong>
+                {hasSelection ? selectedIds.size : activeCount}
+              </strong> {hasSelection ? 'equipos seleccionados' : 'equipos activos'}.
             </p>
 
             <div className="flex gap-2">

@@ -4,7 +4,7 @@ import { useQuery } from '@tanstack/react-query';
 import {
   LayoutDashboard, Package, ArrowDownToLine, ArrowLeftRight, ArrowUpFromLine,
   ShoppingCart, History, Tags, LogOut, ChevronLeft, ChevronRight,
-  Box, MapPin, Building2, ChevronDown, AlertOctagon, Sun, Moon, Users, LayoutGrid, BarChart2, Crown, User,
+  Box, MapPin, Building2, ChevronDown, AlertOctagon, Sun, Moon, Users, LayoutGrid, BarChart2, Crown, User, Monitor,
 } from 'lucide-react';
 import { useAuth } from '@/context/AuthContext';
 import { useTheme } from '@/context/ThemeContext';
@@ -24,6 +24,7 @@ const MAIN_NAV = [
   { to: '/categories',      label: 'Categorías',        icon: Tags,             permission: 'categories' },
   { to: '/damaged',         label: 'Tablero',           icon: AlertOctagon,     permission: null },
   { to: '/reports',         label: 'Reportes',          icon: BarChart2,        permission: null },
+  { to: '/maquinas',        label: 'Máquinas',          icon: Monitor,          permission: null, defaultOnly: true },
 ];
 
 const PLAN_LABEL = { starter: 'Starter', pro: 'Pro', enterprise: 'Enterprise' };
@@ -101,6 +102,7 @@ export default function Sidebar() {
         {MAIN_NAV
           .filter(item => canSee(item.permission))
           .filter(item => !(item.hideForPhysical && tenant?.inventory_type === 'physical'))
+          .filter(item => !(item.defaultOnly && !tenant?.is_default))
           .map(({ to, label, icon: Icon }) => (
           <NavLink
             key={to}

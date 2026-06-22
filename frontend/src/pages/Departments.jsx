@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Link } from 'react-router-dom';
-import { Building2, Plus, Trash2, Loader2, ArrowRight, MapPin } from 'lucide-react';
+import { Building2, Plus, Trash2, Loader2, ArrowRight, MapPin, Pencil } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -18,10 +18,16 @@ const EMPTY = { name: '', description: '', manager: '', sucursal_id: '', sucursa
 export default function Departments() {
   const queryClient = useQueryClient();
   const { toast } = useToast();
-  const [open, setOpen]   = useState(false);
-  const [saving, setSaving] = useState(false);
-  const [form, setForm]   = useState(EMPTY);
+  const [open, setOpen]         = useState(false);
+  const [saving, setSaving]     = useState(false);
+  const [form, setForm]         = useState(EMPTY);
   const [sucursalFilter, setSucursalFilter] = useState('all');
+
+  // Edit state
+  const [editOpen, setEditOpen]   = useState(false);
+  const [editForm, setEditForm]   = useState(EMPTY);
+  const [editId, setEditId]       = useState(null);
+  const [editSaving, setEditSaving] = useState(false);
 
   const { data: departments = [] } = useQuery({
     queryKey: ['departments'],
@@ -61,6 +67,30 @@ export default function Departments() {
     } finally { setSaving(false); }
   };
 
+  const openEdit = (dept) => {
+    setEditId(dept.id);
+    setEditForm({
+      name:         dept.name        || '',
+      description:  dept.description || '',
+      manager:      dept.manager     || '',
+      sucursal_id:  dept.sucursal_id || '',
+      sucursal_name: dept.sucursal_name || '',
+    });
+    setEditOpen(true);
+  };
+
+  const handleUpdate = async () => {
+    if (!editForm.name) return;
+    setEditSaving(true);
+    try {
+      const sel = sucursales.find(s => s.id === editForm.sucursal_id);
+      await api.put(`/departments/${editId}`, { ...editForm, sucursal_name: sel?.name || editForm.sucursal_name });
+      queryClient.invalidateQueries({ queryKey: ['departments'] });
+      setEditOpen(false);
+      toast({ title: 'Departamento actualizado', description: editForm.name });
+    } finally { setEditSaving(false); }
+  };
+
   const handleDelete = async (id) => {
     if (!confirm('¿Eliminar este departamento?')) return;
     await api.delete(`/departments/${id}`);
@@ -77,11 +107,18 @@ export default function Departments() {
           <div className="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center mb-3">
             <Building2 className="w-5 h-5 text-primary" />
           </div>
-          <Button variant="ghost" size="icon"
-            className="opacity-0 group-hover:opacity-100 transition-opacity text-muted-foreground hover:text-destructive h-8 w-8"
-            onClick={e => { e.preventDefault(); handleDelete(dept.id); }}>
-            <Trash2 className="w-4 h-4" />
-          </Button>
+          <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+            <Button variant="ghost" size="icon"
+              className="text-muted-foreground hover:text-primary h-8 w-8"
+              onClick={e => { e.preventDefault(); openEdit(dept); }}>
+              <Pencil className="w-4 h-4" />
+            </Button>
+            <Button variant="ghost" size="icon"
+              className="text-muted-foreground hover:text-destructive h-8 w-8"
+              onClick={e => { e.preventDefault(); handleDelete(dept.id); }}>
+              <Trash2 className="w-4 h-4" />
+            </Button>
+          </div>
         </div>
         <h3 className="font-semibold">{dept.name}</h3>
         {dept.manager && <p className="text-xs text-muted-foreground mt-0.5">{dept.manager}</p>}
@@ -158,6 +195,41 @@ export default function Departments() {
           </div>
         }
       />
+
+      {/* Edit Dialog */}
+      <Dialog open={editOpen} onOpenChange={setEditOpen}>
+        <DialogContent className="rounded-2xl">
+          <DialogHeader><DialogTitle>Editar Departamento</DialogTitle></DialogHeader>
+          <div className="space-y-4 mt-4">
+            {sucursales.length > 0 && (
+              <div className="space-y-1.5">
+                <Label className="text-xs">Sucursal</Label>
+                <Select value={editForm.sucursal_id} onValueChange={v => setEditForm(p => ({ ...p, sucursal_id: v }))}>
+                  <SelectTrigger className="rounded-xl"><SelectValue placeholder="Sin sucursal" /></SelectTrigger>
+                  <SelectContent>
+                    {sucursales.map(s => <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
+            <div className="space-y-1.5">
+              <Label className="text-xs">Nombre *</Label>
+              <Input value={editForm.name} onChange={e => setEditForm(p => ({ ...p, name: e.target.value }))} placeholder="Ej: IT, RRHH, Finanzas" className="rounded-xl" />
+            </div>
+            <div className="space-y-1.5">
+              <Label className="text-xs">Responsable</Label>
+              <Input value={editForm.manager} onChange={e => setEditForm(p => ({ ...p, manager: e.target.value }))} placeholder="Nombre del encargado" className="rounded-xl" />
+            </div>
+            <div className="space-y-1.5">
+              <Label className="text-xs">Descripción</Label>
+              <Textarea value={editForm.description} onChange={e => setEditForm(p => ({ ...p, description: e.target.value }))} placeholder="Descripción" className="rounded-xl" rows={2} />
+            </div>
+            <Button onClick={handleUpdate} disabled={editSaving} className="w-full rounded-xl">
+              {editSaving ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : null} Guardar Cambios
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
 
       {departments.length === 0 ? (
         <EmptyState icon={Building2} title="Sin departamentos"
