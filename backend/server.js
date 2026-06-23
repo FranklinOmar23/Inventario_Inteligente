@@ -5,6 +5,7 @@ import express from 'express';
 import cors from 'cors';
 import rateLimit from 'express-rate-limit';
 import swaggerUi from 'swagger-ui-express';
+// swaggerSpec is now a plain object — no swagger-jsdoc glob scanning needed
 
 import { initDB } from './db/database.js';       // existing table creation + migrations + seeds
 import { uploadDir } from './src/controllers/upload.controller.js';

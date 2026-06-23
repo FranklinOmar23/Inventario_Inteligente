@@ -4,7 +4,7 @@ import { useNavigate, Link, useSearchParams } from 'react-router-dom';
 import {
   ArrowDownToLine, Sparkles, Check, Loader2, Camera,
   Barcode, RefreshCw, Search, Plus, PackagePlus, X, ScanLine, Upload, Clock, DollarSign, Calendar,
-  Receipt, Trash2,
+  Receipt, Trash2, Truck,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -52,6 +52,7 @@ const EMPTY_FORM = {
   serial_number: '', photo_url: '', quantity: 1, unit_cost: '', notes: '',
   entry_date: new Date().toISOString().split('T')[0],
   expiration_date: '', batch_number: '', unit_measure: '',
+  supplier_id: '', supplier_name: '',
 };
 
 const STATUS_LABEL = { in_stock: 'En stock', checked_out: 'En uso', maintenance: 'Mantenimiento', retired: 'Retirado' };
@@ -197,6 +198,26 @@ export default function Entry() {
   const { data: categories = [] }  = useQuery({ queryKey: ['categories'],  queryFn: () => api.get('/categories').then(r => r.data) });
   const { data: sucursales = [] }  = useQuery({ queryKey: ['sucursales'],  queryFn: () => api.get('/sucursales').then(r => r.data) });
   const { data: estantes = [] }    = useQuery({ queryKey: ['estantes'],    queryFn: () => api.get('/estantes').then(r => r.data) });
+  const { data: suppliers = [] }   = useQuery({ queryKey: ['suppliers'],   queryFn: () => api.get('/suppliers').then(r => r.data) });
+
+  // Restore draft saved before navigating to add a supplier
+  useEffect(() => {
+    const raw = sessionStorage.getItem('entry-form-draft');
+    if (!raw) return;
+    try {
+      const draft = JSON.parse(raw);
+      sessionStorage.removeItem('entry-form-draft');
+      setForm(draft);
+    } catch {}
+  }, []);
+
+  // Auto-select supplier returned via URL param after adding one
+  useEffect(() => {
+    const supplierId = searchParams.get('supplier_id');
+    if (!supplierId || suppliers.length === 0) return;
+    const sup = suppliers.find(s => s.id === supplierId);
+    if (sup) setForm(p => ({ ...p, supplier_id: sup.id, supplier_name: sup.name }));
+  }, [searchParams, suppliers]);
 
   // Pre-fill dept/suc from URL params (e.g. coming from DepartmentDetail)
   useEffect(() => {
@@ -211,6 +232,11 @@ export default function Entry() {
   }, [searchParams, departments, sucursales]);
 
   const update = (field, value) => setForm(p => ({ ...p, [field]: value }));
+
+  const handleGoToAddSupplier = () => {
+    sessionStorage.setItem('entry-form-draft', JSON.stringify(form));
+    navigate('/suppliers?openModal=1&returnTo=/entry');
+  };
 
   const applyAiResult = (result) => {
     const updates = {};
@@ -963,6 +989,56 @@ export default function Entry() {
                   <SelectContent>{categories.map(c => <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>)}</SelectContent>
                 </Select>
               </div>
+              {/* Supplier selector */}
+              <div className="space-y-1.5">
+                <Label className="text-xs flex items-center gap-1.5">
+                  <Truck className="w-3 h-3" /> Proveedor
+                </Label>
+                {suppliers.length > 0 ? (
+                  <div className="flex gap-2">
+                    <Select
+                      value={form.supplier_id || '__none__'}
+                      onValueChange={v => {
+                        const sup = suppliers.find(s => s.id === v);
+                        update('supplier_id',   sup ? sup.id   : '');
+                        update('supplier_name', sup ? sup.name : '');
+                      }}
+                    >
+                      <SelectTrigger className="rounded-xl flex-1">
+                        <SelectValue placeholder="Sin proveedor (opcional)" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="__none__">Sin proveedor</SelectItem>
+                        {suppliers.map(s => (
+                          <SelectItem key={s.id} value={s.id}>
+                            {s.name}{s.rnc ? ` · ${s.rnc}` : ''}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="icon"
+                      className="rounded-xl shrink-0"
+                      title="Agregar nuevo proveedor"
+                      onClick={handleGoToAddSupplier}
+                    >
+                      <Plus className="w-4 h-4" />
+                    </Button>
+                  </div>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={handleGoToAddSupplier}
+                    className="flex items-center gap-2 w-full px-3 py-2 rounded-xl border border-dashed border-border text-xs text-muted-foreground hover:border-primary/50 hover:text-primary transition-colors"
+                  >
+                    <Plus className="w-3.5 h-3.5 shrink-0" />
+                    Agregar proveedor
+                  </button>
+                )}
+              </div>
+
               <div className="space-y-1.5">
                 <Label className="text-xs">Descripción</Label>
                 <Textarea value={form.description} onChange={e => update('description', e.target.value)} placeholder="Detalles del equipo..." className="rounded-xl" rows={2} />

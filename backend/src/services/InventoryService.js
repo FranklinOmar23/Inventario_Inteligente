@@ -27,6 +27,15 @@ export class InventoryService {
 
   async create(tenantId, data) {
     if (!data.name) throw new ValidationError('Nombre requerido');
+    const tenant = await this.tenantRepo.findByIdRaw(tenantId);
+    if (tenant?.max_records) {
+      const cnt = await this.repo.count({ tenantId });
+      if (cnt >= tenant.max_records) {
+        throw new ForbiddenError(
+          `Tu plan permite hasta ${Number(tenant.max_records).toLocaleString('es-DO')} ítems en inventario. Actualiza tu plan para agregar más.`
+        );
+      }
+    }
     const id    = crypto.randomUUID();
     const today = new Date().toISOString().split('T')[0];
     await this.repo.create({ ...data, id, entry_date: data.entry_date || today, tenant_id: tenantId });
@@ -35,6 +44,21 @@ export class InventoryService {
 
   async bulkCreate(tenantId, items) {
     if (!Array.isArray(items) || !items.length) throw new ValidationError('Se requiere un arreglo de items');
+    const tenant = await this.tenantRepo.findByIdRaw(tenantId);
+    if (tenant?.max_records) {
+      const current   = await this.repo.count({ tenantId });
+      const available = Number(tenant.max_records) - current;
+      if (available <= 0) {
+        throw new ForbiddenError(
+          `Tu plan permite hasta ${Number(tenant.max_records).toLocaleString('es-DO')} ítems. Has alcanzado el límite. Actualiza tu plan para importar más.`
+        );
+      }
+      if (items.length > available) {
+        throw new ForbiddenError(
+          `Solo puedes agregar ${available.toLocaleString('es-DO')} ítem(s) más (límite de ${Number(tenant.max_records).toLocaleString('es-DO')}). Reduce la importación o actualiza tu plan.`
+        );
+      }
+    }
     const today = new Date().toISOString().split('T')[0];
     const ids = [];
     for (const item of items) {

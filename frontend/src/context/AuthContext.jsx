@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect } from 'react';
+import React, { createContext, useContext, useState, useEffect, useMemo } from 'react';
 import api from '@/api/client';
 
 const AuthContext = createContext(null);
@@ -59,8 +59,18 @@ export function AuthProvider({ children }) {
     setTenant(null);
   };
 
+  // Account is blocked when: not exempt, not active, and trial has expired
+  const isBlocked = useMemo(() => {
+    if (!tenant) return false;
+    if (tenant.billing_exempt) return false;
+    if (tenant.billing_status === 'active') return false;
+    if (tenant.trial_ends_at && new Date(tenant.trial_ends_at) < new Date()) return true;
+    if (['past_due', 'canceled', 'unpaid', 'inactive'].includes(tenant.billing_status)) return true;
+    return false;
+  }, [tenant]);
+
   return (
-    <AuthContext.Provider value={{ user, tenant, loading, login, register, setupTenant, logout }}>
+    <AuthContext.Provider value={{ user, tenant, loading, login, register, setupTenant, logout, isBlocked }}>
       {children}
     </AuthContext.Provider>
   );

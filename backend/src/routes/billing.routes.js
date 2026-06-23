@@ -27,6 +27,9 @@ export function billingRouter(ctrl) {
    */
   router.post('/create-checkout-session', authenticate, asyncHandler(ctrl.createCheckoutSession));
 
+  router.post('/cancel',     authenticate, asyncHandler(ctrl.cancelSubscription));
+  router.post('/reactivate', authenticate, asyncHandler(ctrl.reactivateSubscription));
+
   // Webhook: raw body registered in server.js BEFORE express.json()
   router.post('/webhook', asyncHandler(ctrl.webhook));
 

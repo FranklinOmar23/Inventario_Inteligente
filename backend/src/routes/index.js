@@ -12,6 +12,7 @@ import { ActivityLogRepository }   from '../repositories/ActivityLogRepository.j
 import { PurchaseOrderRepository } from '../repositories/PurchaseOrderRepository.js';
 import { EstanteRepository }       from '../repositories/EstanteRepository.js';
 import { MachineRepository }       from '../repositories/MachineRepository.js';
+import { SupplierRepository }      from '../repositories/SupplierRepository.js';
 
 // Services
 import { AuthService }          from '../services/AuthService.js';
@@ -42,6 +43,7 @@ import { estanteController }       from '../controllers/estante.controller.js';
 import { aiController }            from '../controllers/ai.controller.js';
 import { billingController }       from '../controllers/billing.controller.js';
 import { machineController }       from '../controllers/machine.controller.js';
+import { supplierController }      from '../controllers/supplier.controller.js';
 
 // Route factories
 import { authRouter }          from './auth.routes.js';
@@ -59,6 +61,7 @@ import { aiRouter }            from './ai.routes.js';
 import { uploadRouter }        from './upload.routes.js';
 import { billingRouter }       from './billing.routes.js';
 import { machineRouter }       from './machine.routes.js';
+import { supplierRouter }      from './supplier.routes.js';
 
 export function createRouter() {
   const pool = getPool();
@@ -75,6 +78,7 @@ export function createRouter() {
   const purchaseOrderRepo = new PurchaseOrderRepository(pool);
   const estanteRepo       = new EstanteRepository(pool);
   const machineRepo       = new MachineRepository(pool);
+  const supplierRepo      = new SupplierRepository(pool);
 
   // ── Services ──────────────────────────────────────────────────────────────────
   const authSvc          = new AuthService(userRepo, tenantRepo, sucursalRepo, departmentRepo);
@@ -106,6 +110,7 @@ export function createRouter() {
   router.use('/upload',         uploadRouter());
   router.use('/billing',        billingRouter(billingController(tenantRepo)));
   router.use('/machines',       machineRouter(machineController(machineRepo)));
+  router.use('/suppliers',      supplierRouter(supplierController(supplierRepo)));
 
   router.get('/health', (_req, res) => res.json({ status: 'ok', time: new Date().toISOString() }));
 

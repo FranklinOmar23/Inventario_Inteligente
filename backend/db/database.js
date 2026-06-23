@@ -8,15 +8,23 @@ let pool;
 export function getDB() {
   if (!pool) {
     pool = mysql.createPool({
-      host:             process.env.DB_HOST     || 'localhost',
-      port:             Number(process.env.DB_PORT) || 3306,
-      user:             process.env.DB_USER,
-      password:         process.env.DB_PASSWORD,
-      database:         process.env.DB_NAME,
-      waitForConnections: true,
-      connectionLimit:  10,
-      charset:          'utf8mb4',
-      timezone:         '+00:00',
+      host:                  process.env.DB_HOST     || 'localhost',
+      port:                  Number(process.env.DB_PORT) || 3306,
+      user:                  process.env.DB_USER,
+      password:              process.env.DB_PASSWORD,
+      database:              process.env.DB_NAME,
+      waitForConnections:    true,
+      connectionLimit:       10,
+      queueLimit:            0,
+      enableKeepAlive:       true,
+      keepAliveInitialDelay: 0,
+      charset:               'utf8mb4',
+      timezone:              '+00:00',
+    });
+    // Silently swallow idle-connection errors (ECONNRESET, PROTOCOL_CONNECTION_LOST)
+    // — the pool discards the dead connection and creates a fresh one on next request.
+    pool.on('error', (err) => {
+      if (err.fatal) console.warn('[pool] connection dropped, will reconnect:', err.code);
     });
   }
   return pool;
@@ -225,6 +233,28 @@ export async function initDB() {
   `);
 
   await db.execute(`
+    CREATE TABLE IF NOT EXISTS suppliers (
+      id            VARCHAR(36)  NOT NULL,
+      tenant_id     VARCHAR(36)  NOT NULL,
+      rnc           VARCHAR(20)  DEFAULT NULL,
+      name          VARCHAR(255) NOT NULL,
+      business_name VARCHAR(255) DEFAULT '',
+      tipo          VARCHAR(100) DEFAULT '',
+      dgii_status   VARCHAR(50)  DEFAULT '',
+      phone         VARCHAR(50)  DEFAULT '',
+      email         VARCHAR(255) DEFAULT '',
+      address       TEXT         DEFAULT NULL,
+      contact_name  VARCHAR(255) DEFAULT '',
+      notes         TEXT         DEFAULT NULL,
+      created_at    DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      deleted_at    DATETIME DEFAULT NULL,
+      PRIMARY KEY (id),
+      KEY idx_suppliers_tenant (tenant_id),
+      KEY idx_suppliers_rnc    (rnc)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+  `);
+
+  await db.execute(`
     CREATE TABLE IF NOT EXISTS tenant_email_config (
       tenant_id      VARCHAR(36)  NOT NULL,
       manager_email  VARCHAR(255) DEFAULT NULL,
@@ -321,6 +351,10 @@ export async function initDB() {
   await addCol(db, 'machines', 'status', "ENUM('active','inactive') NOT NULL DEFAULT 'active'");
   // Tenants: is_default flag (for existing tables without it)
   await addCol(db, 'tenants', 'is_default', 'TINYINT(1) NOT NULL DEFAULT 0');
+
+  // Inventory: supplier reference
+  await addCol(db, 'inventory_items', 'supplier_id',   'VARCHAR(36) DEFAULT NULL');
+  await addCol(db, 'inventory_items', 'supplier_name', 'VARCHAR(255) DEFAULT ""');
 
   // ── Multi-tenant migration: seed default tenant and assign orphan rows ──────
 

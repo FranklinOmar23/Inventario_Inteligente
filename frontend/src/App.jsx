@@ -24,6 +24,10 @@ import Estantes from '@/pages/Estantes';
 import Reports from '@/pages/Reports';
 import Profile from '@/pages/Profile';
 import Maquinas from '@/pages/Maquinas';
+import Suppliers from '@/pages/Suppliers';
+import Billing from '@/pages/Billing';
+import BillingSuccess from '@/pages/BillingSuccess';
+import BillingCancelled from '@/pages/BillingCancelled';
 import Login from '@/pages/Login';
 import Register from '@/pages/Register';
 import ForgotPassword from '@/pages/ForgotPassword';
@@ -63,6 +67,10 @@ export default function App() {
               <Route path="/reports" element={<Reports />} />
               <Route path="/profile" element={<Profile />} />
               <Route path="/maquinas" element={<Maquinas />} />
+              <Route path="/suppliers" element={<Suppliers />} />
+              <Route path="/billing" element={<Billing />} />
+              <Route path="/billing/success" element={<BillingSuccess />} />
+              <Route path="/billing/cancelled" element={<BillingCancelled />} />
             </Route>
             <Route path="*" element={<Navigate to="/" replace />} />
           </Routes>

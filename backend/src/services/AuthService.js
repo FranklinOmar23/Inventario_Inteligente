@@ -3,9 +3,9 @@ import jwt from 'jsonwebtoken';
 import { env } from '../config/env.js';
 import { ValidationError, UnauthorizedError, ConflictError, NotFoundError } from '../errors/AppError.js';
 
-const PLAN_LIMITS = {
-  starter:    { max_records: 40000, max_users: 3,   max_sucursales: 1 },
-  pro:        { max_records: 60000, max_users: 5,   max_sucursales: 3 },
+export const PLAN_LIMITS = {
+  starter:    { max_records: 15000, max_users: 5,  max_sucursales: 3 },
+  pro:        { max_records: 30000, max_users: 10, max_sucursales: 5 },
   enterprise: { max_records: 999999, max_users: 999, max_sucursales: 999 },
 };
 

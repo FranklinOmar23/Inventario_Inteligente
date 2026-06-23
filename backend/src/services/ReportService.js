@@ -3,16 +3,24 @@ export class ReportService {
     this.pool = pool;
   }
 
-  _scopeWhere(tenantId, sucursalId) {
+  _scopeWhere(tenantId, sucursalId, days, from, to) {
     const p = [];
     let w = 'deleted_at IS NULL';
     if (tenantId)   { w += ' AND tenant_id = ?'; p.push(tenantId); }
     if (sucursalId) { w += ' AND sucursal_id = ?'; p.push(sucursalId); }
+    if (from && to) {
+      w += ' AND entry_date >= ? AND entry_date <= ?';
+      p.push(from, to);
+    } else if (days) {
+      const safeDays = Math.min(parseInt(days) || 30, 365);
+      w += ' AND entry_date >= DATE_SUB(CURDATE(), INTERVAL ? DAY)';
+      p.push(safeDays);
+    }
     return { w, p };
   }
 
-  async summary(tenantId, sucursalId) {
-    const { w, p } = this._scopeWhere(tenantId, sucursalId);
+  async summary(tenantId, sucursalId, days, from, to) {
+    const { w, p } = this._scopeWhere(tenantId, sucursalId, days, from, to);
     const [[s]] = await this.pool.execute(`
       SELECT
         COUNT(*)                                                                    AS items,
@@ -30,8 +38,8 @@ export class ReportService {
     return s;
   }
 
-  async byStatus(tenantId, sucursalId) {
-    const { w, p } = this._scopeWhere(tenantId, sucursalId);
+  async byStatus(tenantId, sucursalId, days, from, to) {
+    const { w, p } = this._scopeWhere(tenantId, sucursalId, days, from, to);
     const [rows] = await this.pool.execute(
       `SELECT status, COUNT(*) AS items, COALESCE(SUM(quantity),0) AS quantity FROM inventory_items WHERE ${w} GROUP BY status ORDER BY quantity DESC`,
       p
@@ -39,8 +47,8 @@ export class ReportService {
     return rows;
   }
 
-  async byCategory(tenantId, sucursalId) {
-    const { w, p } = this._scopeWhere(tenantId, sucursalId);
+  async byCategory(tenantId, sucursalId, days, from, to) {
+    const { w, p } = this._scopeWhere(tenantId, sucursalId, days, from, to);
     const [rows] = await this.pool.execute(
       `SELECT COALESCE(NULLIF(category_name,''),'Sin categoría') AS name, COUNT(*) AS items, COALESCE(SUM(quantity),0) AS quantity FROM inventory_items WHERE ${w} GROUP BY category_name ORDER BY quantity DESC LIMIT 12`,
       p
@@ -48,10 +56,10 @@ export class ReportService {
     return rows;
   }
 
-  async bySucursal(tenantId) {
-    const p = [tenantId];
+  async bySucursal(tenantId, days, from, to) {
+    const { w, p } = this._scopeWhere(tenantId, null, days, from, to);
     const [rows] = await this.pool.execute(
-      `SELECT COALESCE(NULLIF(sucursal_name,''),'Sin sucursal') AS name, COUNT(*) AS items, COALESCE(SUM(quantity),0) AS quantity FROM inventory_items WHERE deleted_at IS NULL AND tenant_id = ? GROUP BY sucursal_name ORDER BY quantity DESC`,
+      `SELECT COALESCE(NULLIF(sucursal_name,''),'Sin sucursal') AS name, COUNT(*) AS items, COALESCE(SUM(quantity),0) AS quantity FROM inventory_items WHERE ${w} GROUP BY sucursal_name ORDER BY quantity DESC`,
       p
     );
     return rows;
@@ -92,12 +100,22 @@ export class ReportService {
     return Object.values(map);
   }
 
-  async byEstante(tenantId, sucursalId) {
+  async byEstante(tenantId, sucursalId, days, from, to) {
     const p = [tenantId];
     let w = 'e.deleted_at IS NULL AND e.tenant_id = ?';
     if (sucursalId) { w += ' AND e.sucursal_id = ?'; p.push(sucursalId); }
+    // Date filter on the inventory items side
+    let iWhere = 'i.deleted_at IS NULL';
+    if (from && to) {
+      iWhere += ' AND i.entry_date >= ? AND i.entry_date <= ?';
+      p.push(from, to);
+    } else if (days) {
+      const safeDays = Math.min(parseInt(days) || 30, 365);
+      iWhere += ' AND i.entry_date >= DATE_SUB(CURDATE(), INTERVAL ? DAY)';
+      p.push(safeDays);
+    }
     const [rows] = await this.pool.execute(
-      `SELECT e.name, e.type, e.sucursal_name, COUNT(i.id) AS items, COALESCE(SUM(i.quantity),0) AS quantity FROM estantes e LEFT JOIN inventory_items i ON i.shelf_id = e.id AND i.deleted_at IS NULL WHERE ${w} GROUP BY e.id, e.name, e.type, e.sucursal_name ORDER BY quantity DESC LIMIT 12`,
+      `SELECT e.name, e.type, e.sucursal_name, COUNT(i.id) AS items, COALESCE(SUM(i.quantity),0) AS quantity FROM estantes e LEFT JOIN inventory_items i ON i.shelf_id = e.id AND ${iWhere} WHERE ${w} GROUP BY e.id, e.name, e.type, e.sucursal_name ORDER BY quantity DESC LIMIT 12`,
       p
     );
     return rows;
@@ -130,9 +148,17 @@ export class ReportService {
     return { summary, by_reason: byReason };
   }
 
-  async topItems(tenantId, sucursalId) {
+  async topItems(tenantId, sucursalId, days, from, to) {
     const p = [tenantId];
     let w = "l.action IN ('checkout','entry') AND l.tenant_id = ?";
+    if (from && to) {
+      w += ' AND l.timestamp >= ? AND l.timestamp <= ?';
+      p.push(`${from} 00:00:00`, `${to} 23:59:59`);
+    } else if (days) {
+      const safeDays = Math.min(parseInt(days) || 30, 365);
+      w += ' AND l.timestamp >= DATE_SUB(NOW(), INTERVAL ? DAY)';
+      p.push(safeDays);
+    }
     if (sucursalId) {
       w += ' AND l.item_id IN (SELECT id FROM inventory_items WHERE sucursal_id = ? AND deleted_at IS NULL)';
       p.push(sucursalId);

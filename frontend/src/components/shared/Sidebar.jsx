@@ -4,7 +4,7 @@ import { useQuery } from '@tanstack/react-query';
 import {
   LayoutDashboard, Package, ArrowDownToLine, ArrowLeftRight, ArrowUpFromLine,
   ShoppingCart, History, Tags, LogOut, ChevronLeft, ChevronRight,
-  Box, MapPin, Building2, ChevronDown, AlertOctagon, Sun, Moon, Users, LayoutGrid, BarChart2, Crown, User, Monitor,
+  Box, MapPin, Building2, ChevronDown, AlertOctagon, Sun, Moon, Users, LayoutGrid, BarChart2, Crown, User, Monitor, CreditCard, Truck,
 } from 'lucide-react';
 import { useAuth } from '@/context/AuthContext';
 import { useTheme } from '@/context/ThemeContext';
@@ -25,6 +25,7 @@ const MAIN_NAV = [
   { to: '/damaged',         label: 'Tablero',           icon: AlertOctagon,     permission: null },
   { to: '/reports',         label: 'Reportes',          icon: BarChart2,        permission: null },
   { to: '/maquinas',        label: 'Máquinas',          icon: Monitor,          permission: null, defaultOnly: true },
+  { to: '/suppliers',       label: 'Proveedores',        icon: Truck,            permission: null },
 ];
 
 const PLAN_LABEL = { starter: 'Starter', pro: 'Pro', enterprise: 'Enterprise' };
@@ -115,15 +116,24 @@ export default function Sidebar() {
           </NavLink>
         ))}
 
-        {/* Admin-only: Usuarios */}
+        {/* Admin-only: Usuarios + Facturación */}
         {isAdmin && (
-          <NavLink
-            to="/users"
-            className={({ isActive }) => cn('sidebar-item', isActive ? 'active' : 'text-white/70')}
-          >
-            <Users className="w-4 h-4 shrink-0" />
-            {!collapsed && <span className="truncate">Usuarios</span>}
-          </NavLink>
+          <>
+            <NavLink
+              to="/users"
+              className={({ isActive }) => cn('sidebar-item', isActive ? 'active' : 'text-white/70')}
+            >
+              <Users className="w-4 h-4 shrink-0" />
+              {!collapsed && <span className="truncate">Usuarios</span>}
+            </NavLink>
+            <NavLink
+              to="/billing"
+              className={({ isActive }) => cn('sidebar-item', isActive ? 'active' : 'text-white/70')}
+            >
+              <CreditCard className="w-4 h-4 shrink-0" />
+              {!collapsed && <span className="truncate">Facturación</span>}
+            </NavLink>
+          </>
         )}
 
         {/* Organización section */}

@@ -15,6 +15,15 @@ export class MachineRepository extends BaseRepository {
     return rows;
   }
 
+  async softDeleteByTenant(id, tenantId) {
+    const [result] = await this.pool.execute(
+      `UPDATE machines SET deleted_at = NOW()
+       WHERE id = ? AND tenant_id = ? AND deleted_at IS NULL`,
+      [id, tenantId]
+    );
+    return result.affectedRows > 0;
+  }
+
   async create(tenantId, data) {
     const id = crypto.randomUUID();
     await this.pool.execute(

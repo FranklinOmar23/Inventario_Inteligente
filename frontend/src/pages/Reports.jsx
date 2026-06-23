@@ -139,7 +139,7 @@ export default function Reports() {
   });
   const [customTo,   setCustomTo]   = useState(() => new Date().toISOString().slice(0, 10));
 
-  const isCustomReady = dateMode === 'custom' && customFrom && customTo;
+  const isCustomReady = dateMode === 'custom' && !!customFrom && !!customTo;
   const dateParams    = isCustomReady ? `from=${customFrom}&to=${customTo}` : `days=${days}`;
   const dateLabel     = isCustomReady
     ? `${customFrom} al ${customTo}`
@@ -149,6 +149,14 @@ export default function Reports() {
     ? Math.round((new Date(customTo) - new Date(customFrom)) / 86400000) + 1
     : Number(days);
   const tickInterval = rangeDays <= 7 ? 0 : rangeDays <= 30 ? 4 : rangeDays <= 60 ? 8 : 14;
+
+  // ── Activity series visibility ────────────────────────────────────────
+  const [hiddenSeries, setHiddenSeries] = useState(new Set());
+  const toggleSeries = (key) => setHiddenSeries(prev => {
+    const next = new Set(prev);
+    if (next.has(key)) next.delete(key); else next.add(key);
+    return next;
+  });
 
   // ── AI analysis state ─────────────────────────────────────────────────
   const [aiOpen,     setAiOpen]     = useState(false);
@@ -160,8 +168,15 @@ export default function Reports() {
   const textColor = isDark ? '#a1a1aa' : '#6b7280';
   const axisProps = { tick: { fill: textColor, fontSize: 11 }, axisLine: false, tickLine: false };
 
-  // ── Queries ───────────────────────────────────────────────────────────
-  const qOpts = (key, url) => ({ queryKey: [key], queryFn: () => api.get(url).then(r => r.data), staleTime: 30_000 });
+  // ── Queries — all use dateParams so charts react to the period picker ────
+  const dateEnabled = dateMode === 'preset' || isCustomReady;
+
+  const qOpts = (key, path) => ({
+    queryKey:  [key, dateParams],
+    queryFn:   () => api.get(`${path}?${dateParams}`).then(r => r.data),
+    staleTime: 30_000,
+    enabled:   dateEnabled,
+  });
 
   const { data: summary,    isLoading: lSum  } = useQuery(qOpts('rep-summary',    '/reports/summary'));
   const { data: byStatus,   isLoading: lSt   } = useQuery(qOpts('rep-status',     '/reports/by-status'));
@@ -172,23 +187,26 @@ export default function Reports() {
 
   const { data: activity = [], isLoading: lAct } = useQuery({
     queryKey: ['rep-activity', dateParams],
-    queryFn: () => api.get(`/reports/activity?${dateParams}`).then(r => r.data),
+    queryFn:  () => api.get(`/reports/activity?${dateParams}`).then(r => r.data),
     staleTime: 30_000,
-    enabled: dateMode === 'preset' || isCustomReady,
+    enabled:   dateEnabled,
   });
 
   const { data: exits, isLoading: lExit } = useQuery({
     queryKey: ['rep-exits', dateParams],
-    queryFn: () => api.get(`/reports/exits?${dateParams}`).then(r => r.data),
+    queryFn:  () => api.get(`/reports/exits?${dateParams}`).then(r => r.data),
     staleTime: 30_000,
-    enabled: !isPhysical && (dateMode === 'preset' || isCustomReady),
+    enabled:   !isPhysical && dateEnabled,
   });
 
   // ── Derived data ──────────────────────────────────────────────────────
   const statusData = (byStatus || []).map(r => ({
-    ...r, name: STATUS_CFG[r.status]?.label || r.status, color: STATUS_CFG[r.status]?.color || '#6b7280',
+    ...r,
+    name:     STATUS_CFG[r.status]?.label || r.status,
+    color:    STATUS_CFG[r.status]?.color || '#6b7280',
+    quantity: Number(r.quantity),
   }));
-  const totalQty = summary?.total_qty ?? 0;
+  const totalQty = Number(summary?.total_qty ?? 0);
 
   const formatDate = (d) => { try { return format(parseISO(d), 'dd/MM', { locale: es }); } catch { return d; } };
 
@@ -377,13 +395,21 @@ export default function Reports() {
                 <YAxis {...axisProps} allowDecimals={false} />
                 <Tooltip content={<ChartTooltip />} />
                 <Legend iconType="circle" iconSize={8}
-                  formatter={v => <span style={{ color: textColor, fontSize: 11 }}>
-                    {v === 'entry' ? 'Entradas' : v === 'checkout' ? 'Salidas' : 'Devoluciones'}
-                  </span>}
+                  onClick={(data) => toggleSeries(data.value)}
+                  formatter={(v) => (
+                    <span style={{
+                      color:          hiddenSeries.has(v) ? (isDark ? '#52525b' : '#9ca3af') : textColor,
+                      fontSize:       11,
+                      cursor:         'pointer',
+                      textDecoration: hiddenSeries.has(v) ? 'line-through' : 'none',
+                    }}>
+                      {v === 'entry' ? 'Entradas' : v === 'checkout' ? 'Salidas' : 'Devoluciones'}
+                    </span>
+                  )}
                 />
-                <Area type="monotone" dataKey="entry"    name="entry"    stroke="#10b981" strokeWidth={2} fill="url(#grad-entry)"    dot={false} />
-                <Area type="monotone" dataKey="checkout" name="checkout" stroke="#f59e0b" strokeWidth={2} fill="url(#grad-checkout)" dot={false} />
-                <Area type="monotone" dataKey="return"   name="return"   stroke="#3b82f6" strokeWidth={2} fill="url(#grad-return)"   dot={false} />
+                <Area type="monotone" dataKey="entry"    name="entry"    stroke="#10b981" strokeWidth={2} fill="url(#grad-entry)"    dot={false} hide={hiddenSeries.has('entry')} />
+                <Area type="monotone" dataKey="checkout" name="checkout" stroke="#f59e0b" strokeWidth={2} fill="url(#grad-checkout)" dot={false} hide={hiddenSeries.has('checkout')} />
+                <Area type="monotone" dataKey="return"   name="return"   stroke="#3b82f6" strokeWidth={2} fill="url(#grad-return)"   dot={false} hide={hiddenSeries.has('return')} />
               </AreaChart>
             </ResponsiveContainer>
           )}

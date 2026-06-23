@@ -38,4 +38,8 @@ export const env = {
     pricePro:      process.env.STRIPE_PRICE_PRO || '',
     trialDays:     Number(process.env.STRIPE_TRIAL_DAYS) || 14,
   },
+  dgii: {
+    apiKey: process.env.DGII_API_KEY || '',
+    apiUrl: process.env.DGII_API_URL || 'https://pptonanntevatndjyzmk.supabase.co/functions/v1/dgii-api/rnc',
+  },
 };
